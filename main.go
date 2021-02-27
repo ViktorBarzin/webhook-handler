@@ -23,5 +23,9 @@ func main() {
 	http.HandleFunc(chatbot.Path, chatbot.ChatbotHandler)
 
 	log.Printf("Starting webhook handler on %s", listenAddr)
+
+	// Testing
+	chatbot.Main()
+
 	http.ListenAndServe(listenAddr, nil)
 }
