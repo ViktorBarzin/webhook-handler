@@ -3,9 +3,11 @@ package chatbot
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/http/httputil"
 	"os"
 
 	"github.com/pkg/errors"
@@ -30,6 +32,61 @@ type Recipient struct {
 }
 type Message struct {
 	Text string `json:"text"`
+}
+
+type FbWebhookCallback struct {
+	Object string `json:"object"`
+	Entry  []struct {
+		ID        string `json:"id"`
+		Time      int64  `json:"time"`
+		Messaging []struct {
+			Sender struct {
+				ID string `json:"id"`
+			} `json:"sender"`
+			Recipient struct {
+				ID string `json:"id"`
+			} `json:"recipient"`
+			Timestamp int64 `json:"timestamp"`
+			Message   struct {
+				Mid  string `json:"mid"`
+				Text string `json:"text"`
+				Nlp  struct {
+					Intents  []interface{} `json:"intents"`
+					Entities struct {
+						WitLocationLocation []struct {
+							ID         string        `json:"id"`
+							Name       string        `json:"name"`
+							Role       string        `json:"role"`
+							Start      int           `json:"start"`
+							End        int           `json:"end"`
+							Body       string        `json:"body"`
+							Confidence float64       `json:"confidence"`
+							Entities   []interface{} `json:"entities"`
+							Suggested  bool          `json:"suggested"`
+							Value      string        `json:"value"`
+							Type       string        `json:"type"`
+						} `json:"wit$location:location"`
+					} `json:"entities"`
+					Traits struct {
+						WitSentiment []struct {
+							ID         string  `json:"id"`
+							Value      string  `json:"value"`
+							Confidence float64 `json:"confidence"`
+						} `json:"wit$sentiment"`
+						WitGreetings []struct {
+							ID         string  `json:"id"`
+							Value      string  `json:"value"`
+							Confidence float64 `json:"confidence"`
+						} `json:"wit$greetings"`
+					} `json:"traits"`
+					DetectedLocales []struct {
+						Locale     string  `json:"locale"`
+						Confidence float64 `json:"confidence"`
+					} `json:"detected_locales"`
+				} `json:"nlp"`
+			} `json:"message"`
+		} `json:"messaging"`
+	} `json:"entry"`
 }
 
 func writeError(w http.ResponseWriter, code int, msg string) {
@@ -66,8 +123,8 @@ func sendMessage(msg, receiverPsid string) (*http.Response, error) {
 }
 
 func ChatbotHandler(w http.ResponseWriter, r *http.Request) {
-	// log.Printf("Handling request: %s %s%s\n", r.UserAgent(), r.RemoteAddr, r.URL.RequestURI())
-
+	requestDump, err := httputil.DumpRequest(r, true)
+	log.Printf("Processing: '%+v'", string(requestDump))
 	urlVals := r.URL.Query()
 	mode := urlVals.Get("hub.mode")
 	token := urlVals.Get("hub.verify_token")
@@ -78,10 +135,9 @@ func ChatbotHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(200)
 			w.Write([]byte(challenge))
 			return
-		} else {
-			w.WriteHeader(403)
-			return
 		}
+		w.WriteHeader(403)
+		return
 	}
 
 	bodybytes, err := ioutil.ReadAll(r.Body)
@@ -89,9 +145,16 @@ func ChatbotHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "error reading body")
 	}
 
-	body := string(bodybytes)
+	var response FbWebhookCallback
+	json.Unmarshal(bodybytes, &response)
 
-	log.Printf("%+v\n", body)
+	for _, e := range response.Entry {
+		for _, m := range e.Messaging {
+			log.Printf("Message: %s", m.Message.Text)
+			sendMessage(fmt.Sprintf("You sent me: %s", m.Message.Text), m.Sender.ID)
+		}
+	}
+	// log.Printf("%+v\n", response.)
 }
 
 func Main() {
