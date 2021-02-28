@@ -14,13 +14,14 @@ const (
 	InvalidStateName = "Invalid"
 	InitialStateName = "Initial"
 	HelloStateName   = "Hello"
+	BlogStateName    = "Blog"
 	F1StateName      = "F1"
 )
 
 var (
 	InvalidState State = State{
 		Name:    InvalidStateName,
-		Message: "Oops, I didn't quite get that",
+		Message: "Oops, I didn't quite get that. Please use the buttons only.",
 	}
 	Initial State = State{
 		Name:    InitialStateName,
@@ -28,7 +29,11 @@ var (
 	}
 	Hello State = State{
 		Name:    HelloStateName,
-		Message: `Hello there from Viktor Web Services (VWS) bot!`,
+		Message: `How can I help?`,
+	}
+	Blog State = State{
+		Name:    BlogStateName,
+		Message: "To visit my website go to \"https://viktorbarzin.me\"",
 	}
 	F1 State = State{
 		Name:    F1StateName,
@@ -49,6 +54,8 @@ func StateFromString(s string) State {
 		return Initial
 	case HelloStateName:
 		return Hello
+	case BlogStateName:
+		return Blog
 	case F1StateName:
 		return F1
 	default:

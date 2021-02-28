@@ -6,11 +6,12 @@ type Event struct {
 }
 
 const (
-	InvalidEventName    = "Invalid"
-	ResetEventName      = "Reset"
-	GetStartedEventName = "GetStarted"
-	HelpEventName       = "Help"
-	ShowF1InfoEventName = "ShowF1Info"
+	InvalidEventName      = "Invalid"
+	BackEventName         = "Back"
+	GetStartedEventName   = "GetStarted"
+	HelpEventName         = "Help"
+	ShowBlogIntoEventName = "ShowBlogInfo"
+	ShowF1InfoEventName   = "ShowF1Info"
 )
 
 var (
@@ -18,9 +19,9 @@ var (
 		Name:    InvalidEventName,
 		Message: "Invalid Event",
 	}
-	Reset Event = Event{
-		Name:    ResetEventName,
-		Message: "Reset",
+	Back Event = Event{
+		Name:    BackEventName,
+		Message: "Back",
 	}
 	GetStarted Event = Event{
 		Name:    GetStartedEventName,
@@ -30,9 +31,13 @@ var (
 		Name:    HelpEventName,
 		Message: "Help",
 	}
+	ShowBlogInfo Event = Event{
+		Name:    ShowBlogIntoEventName,
+		Message: "Show blog information",
+	}
 	ShowF1Info Event = Event{
 		Name:    ShowF1InfoEventName,
-		Message: "Show F1 services information",
+		Message: "Show F1 information",
 	}
 )
 
@@ -40,12 +45,14 @@ func EventFromString(s string) Event {
 	switch s {
 	case InvalidEventName:
 		return InvalidEvent
-	case ResetEventName:
-		return Reset
+	case BackEventName:
+		return Back
 	case GetStartedEventName:
 		return GetStarted
 	case HelpEventName:
 		return Help
+	case ShowBlogIntoEventName:
+		return ShowBlogInfo
 	case ShowF1InfoEventName:
 		return ShowF1Info
 	default:

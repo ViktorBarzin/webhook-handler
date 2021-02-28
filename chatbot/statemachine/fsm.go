@@ -24,20 +24,37 @@ func ChatBotFSM() *fsm.FSM {
 			},
 			{
 				Name: HelpEventName,
+				Src:  []string{BlogStateName},
+				Dst:  BlogStateName,
+			},
+			{
+				Name: HelpEventName,
 				Src:  []string{F1StateName},
 				Dst:  F1StateName,
 			},
 			// Reset
 			{
-				Name: ResetEventName,
+				Name: BackEventName,
 				Src:  []string{HelloStateName},
 				Dst:  HelloStateName,
 			},
 			{
-				Name: ResetEventName,
+				Name: BackEventName,
+				Src:  []string{BlogStateName},
+				Dst:  HelloStateName,
+			},
+			{
+				Name: BackEventName,
 				Src:  []string{F1StateName},
 				Dst:  HelloStateName,
 			},
+			// Show blog info
+			{
+				Name: ShowBlogIntoEventName,
+				Src:  []string{HelloStateName},
+				Dst:  BlogStateName,
+			},
+
 			// Show F1 info
 			{
 				Name: ShowF1InfoEventName,

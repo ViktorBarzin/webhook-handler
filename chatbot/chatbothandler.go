@@ -159,7 +159,7 @@ func getPostbackMsg(userFsm *fsm.FSM, msg string, recipient string) models.Paylo
 		userFsm.Event(msg)
 		newState := statemachine.StateFromString(userFsm.Current())
 		title = newState.Message
-		glog.Infof("successful transition from '%s' with msg: '%s' to '%s'", current, msg, userFsm.Current())
+		glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", current, msg, userFsm.Current(), userFsm.AvailableTransitions())
 	} else {
 		title = "Oops, I didn't quite get that, please try again\n\n" + statemachine.StateFromString(userFsm.Current()).Message
 		glog.Warningf("failed transition from '%ss' with msg: %s", userFsm.Current(), msg)
@@ -168,6 +168,33 @@ func getPostbackMsg(userFsm *fsm.FSM, msg string, recipient string) models.Paylo
 	// Get consistent button order
 	sort.Strings(transitions)
 	buttons := transitionsToPostbackButtons(transitions)
+
+	// Fb allows only 3 buttons per element, so group elements
+	elements := []models.MessageWithPostbackElement{}
+	buttonGroup := []models.MessageWithPostbackButton{}
+	for i, b := range buttons {
+		if i > 0 && i%3 == 0 {
+			elements = append(elements,
+				models.MessageWithPostbackElement{
+					Title:    title,
+					Subtitle: subtitle,
+					Buttons:  buttonGroup,
+				},
+			)
+			buttonGroup = []models.MessageWithPostbackButton{}
+			// buttonGroup
+		}
+		buttonGroup = append(buttonGroup, b)
+	}
+	if len(buttonGroup) > 0 {
+		elements = append(elements,
+			models.MessageWithPostbackElement{
+				Title:    title,
+				Subtitle: subtitle,
+				Buttons:  buttonGroup,
+			},
+		)
+	}
 
 	return models.PayloadPostback{
 		Recipient: models.Recipient{
@@ -178,13 +205,7 @@ func getPostbackMsg(userFsm *fsm.FSM, msg string, recipient string) models.Paylo
 				Type: "template",
 				Payload: models.MessageWithPostbackPayload{
 					TemplateType: "generic",
-					Elements: []models.MessageWithPostbackElement{
-						{
-							Title:    title,
-							Subtitle: subtitle,
-							Buttons:  buttons,
-						},
-					},
+					Elements:     elements,
 				},
 			},
 		},
