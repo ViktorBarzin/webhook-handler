@@ -1,13 +1,12 @@
-// webhook-handler listens for webhooks from GitHub (for now)
-// and upon `push` and pull request merge events go master redeploys a given k8s resource
 package main
 
 import (
-	"log"
+	"flag"
 	"net/http"
-	"os"
 
 	"viktorbarzin/webhook-handler/chatbot"
+
+	"github.com/golang/glog"
 )
 
 const (
@@ -15,17 +14,21 @@ const (
 )
 
 func main() {
-	webhookSecret = os.Getenv(dockerSecretEnvironmentVar)
-	if len(webhookSecret) == 0 {
-		log.Printf("WARNING: webhook secret environment variable is empty. Anyone can redeploy ANY deployment!")
-	}
-	http.HandleFunc(dockerhubPath, dockerHubHandler)
-	http.HandleFunc(chatbot.Path, chatbot.ChatbotHandler)
+	flag.Set("logtostderr", "true")
+	flag.Set("stderrthreshold", "WARNING")
+	flag.Set("v", "2")
+	flag.Parse()
 
-	log.Printf("Starting webhook handler on %s", listenAddr)
+	chatbotHandler := chatbot.NewChatbotHandler()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(dockerhubPath, dockerHubHandler)
+	mux.HandleFunc(chatbot.Path, chatbotHandler.HandleFunc)
+
+	glog.Infof("Starting webhook handler on %s", listenAddr)
+	http.ListenAndServe(listenAddr, mux)
 
 	// Testing
-	chatbot.Main()
-
-	http.ListenAndServe(listenAddr, nil)
+	// chatbot.Main()
+	// statemachine.Main()
 }

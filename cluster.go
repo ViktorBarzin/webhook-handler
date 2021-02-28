@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -17,7 +18,9 @@ const (
 	tokenPath         = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 )
 
-var webhookSecret string
+var (
+	webhookSecret string = os.Getenv(dockerSecretEnvironmentVar)
+)
 
 // try: cat /var/run/secrets/kubernetes.io/serviceaccount/token
 func authToken() string {

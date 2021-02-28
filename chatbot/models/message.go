@@ -4,39 +4,12 @@ type Payload struct {
 	Recipient Recipient `json:"recipient"`
 	Message   Message   `json:"message"`
 }
+
 type Recipient struct {
 	ID string `json:"id"`
 }
 type Message struct {
 	Text string `json:"text"`
-}
-
-// MessageWithPostback should be used as a value to `Message.Text`
-type MessageWithPostback struct {
-	Attachment MessageWithPostbackAttachment `json:"attachment"`
-}
-
-type MessageWithPostbackAttachment struct {
-	Type    string                     `json:"type"`
-	Payload MessageWithPostbackPayload `json:"payload"`
-}
-
-type MessageWithPostbackPayload struct {
-	TemplateType string                       `json:"template_type"`
-	Elements     []MessageWithPostbackElement `json:"elements"`
-}
-
-type MessageWithPostbackElement struct {
-	Title    string                      `json:"title"`
-	Subtitle string                      `json:"subtitle"`
-	ImageURL string                      `json:"image_url"`
-	Buttons  []MessageWithPostbackButton `json:"buttons"`
-}
-
-type MessageWithPostbackButton struct {
-	Type    string `json:"type"`
-	Title   string `json:"title"`
-	Payload string `json:"payload"`
 }
 
 type FbMessageCallback struct {

@@ -3,13 +3,14 @@ package chatbot
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"viktorbarzin/webhook-handler/chatbot/models"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -23,88 +24,32 @@ var (
 	pageToken   = os.Getenv("FB_PAGE_TOKEN")
 )
 
-// type Payload struct {
-// 	Recipient Recipient `json:"recipient"`
-// 	Message   Message   `json:"message"`
-// }
-// type Recipient struct {
-// 	ID string `json:"id"`
-// }
-// type Message struct {
-// 	Text string `json:"text"`
-// }
-
-// type FbWebhookCallback struct {
-// 	Object string `json:"object"`
-// 	Entry  []struct {
-// 		ID        string `json:"id"`
-// 		Time      int64  `json:"time"`
-// 		Messaging []struct {
-// 			Sender struct {
-// 				ID string `json:"id"`
-// 			} `json:"sender"`
-// 			Recipient struct {
-// 				ID string `json:"id"`
-// 			} `json:"recipient"`
-// 			Timestamp int64 `json:"timestamp"`
-// 			Message   struct {
-// 				Mid  string `json:"mid"`
-// 				Text string `json:"text"`
-// 				Nlp  struct {
-// 					Intents  []interface{} `json:"intents"`
-// 					Entities struct {
-// 						WitLocationLocation []struct {
-// 							ID         string        `json:"id"`
-// 							Name       string        `json:"name"`
-// 							Role       string        `json:"role"`
-// 							Start      int           `json:"start"`
-// 							End        int           `json:"end"`
-// 							Body       string        `json:"body"`
-// 							Confidence float64       `json:"confidence"`
-// 							Entities   []interface{} `json:"entities"`
-// 							Suggested  bool          `json:"suggested"`
-// 							Value      string        `json:"value"`
-// 							Type       string        `json:"type"`
-// 						} `json:"wit$location:location"`
-// 					} `json:"entities"`
-// 					Traits struct {
-// 						WitSentiment []struct {
-// 							ID         string  `json:"id"`
-// 							Value      string  `json:"value"`
-// 							Confidence float64 `json:"confidence"`
-// 						} `json:"wit$sentiment"`
-// 						WitGreetings []struct {
-// 							ID         string  `json:"id"`
-// 							Value      string  `json:"value"`
-// 							Confidence float64 `json:"confidence"`
-// 						} `json:"wit$greetings"`
-// 					} `json:"traits"`
-// 					DetectedLocales []struct {
-// 						Locale     string  `json:"locale"`
-// 						Confidence float64 `json:"confidence"`
-// 					} `json:"detected_locales"`
-// 				} `json:"nlp"`
-// 			} `json:"message"`
-// 		} `json:"messaging"`
-// 	} `json:"entry"`
-// }
-
 func writeError(w http.ResponseWriter, code int, msg string) {
 	w.WriteHeader(code)
 	w.Write([]byte(msg))
 }
 
-func sendMessage(msg, receiverPsid string) (*http.Response, error) {
-	data := models.Payload{
-		Recipient: models.Recipient{ID: receiverPsid},
-		Message:   models.Message{Text: msg},
-	}
-	payloadBytes, err := json.Marshal(data)
+func rawMsgPayloadReader(msg models.Payload, receiverPsid string) (io.Reader, error) {
+	payloadBytes, err := json.Marshal(msg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal request data")
 	}
+	glog.Infof("Sending: %s", string(payloadBytes))
 	body := bytes.NewReader(payloadBytes)
+	return body, nil
+}
 
+func postbackPayloadReader(msg models.PayloadPostback, receiverPsid string) (io.Reader, error) {
+	payloadBytes, err := json.Marshal(msg)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal request data")
+	}
+	glog.Infof("Sending: %s", string(payloadBytes))
+	body := bytes.NewReader(payloadBytes)
+	return body, nil
+}
+
+func sendRequest(body io.Reader) (*http.Response, error) {
 	req, err := http.NewRequest("POST", fbAPIURI+"?access_token="+pageToken, body)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create POST request struct")
@@ -120,48 +65,4 @@ func sendMessage(msg, receiverPsid string) (*http.Response, error) {
 	respBody, err := ioutil.ReadAll(resp.Body)
 	log.Printf("Response body: %+v", string(respBody))
 	return resp, nil
-}
-
-func ChatbotHandler(w http.ResponseWriter, r *http.Request) {
-	requestDump, err := httputil.DumpRequest(r, true)
-	log.Printf("Processing: '%+v'", string(requestDump))
-	urlVals := r.URL.Query()
-	mode := urlVals.Get("hub.mode")
-	token := urlVals.Get("hub.verify_token")
-	challenge := urlVals.Get("hub.challenge")
-	if mode != "" && token != "" {
-		if mode == "subscribe" && token == verifyToken {
-			log.Print("webhook verified")
-			w.WriteHeader(200)
-			w.Write([]byte(challenge))
-			return
-		}
-		w.WriteHeader(403)
-		return
-	}
-
-	bodybytes, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		writeError(w, 400, "error reading body")
-	}
-
-	var response models.FbMessageCallback
-	json.Unmarshal(bodybytes, &response)
-
-	for _, e := range response.Entry {
-		for _, m := range e.Messaging {
-			log.Printf("Message: %s", m.Message.Text)
-			postbackMsg := models.MessageWithPostback{Attachment: models.MessageWithPostbackAttachment{Type: "template", Payload: models.MessageWithPostbackPayload{TemplateType: "generic", Elements: []models.MessageWithPostbackElement{{Title: "Is this what you send to me?", Subtitle: "Tab to answer", Buttons: []models.MessageWithPostbackButton{{Type: "postback", Title: "Yes!", Payload: "yes"}, {Type: "postback", Title: "No!", Payload: "no"}}}}}}}
-			// sendMessage(fmt.Sprintf("You sent me: %s", m.Message.Text), m.Sender.ID)
-
-			marshalled, _ := json.Marshal(postbackMsg)
-			sendMessage(string(marshalled), m.Sender.ID)
-		}
-	}
-	// log.Printf("%+v\n", response.)
-}
-
-func Main() {
-	uid := "3804650372987546"
-	sendMessage("Ready!", uid)
 }
