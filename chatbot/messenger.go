@@ -3,12 +3,12 @@ package chatbot
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"os"
+	"viktorbarzin/webhook-handler/chatbot/models"
 
 	"github.com/pkg/errors"
 )
@@ -23,71 +23,71 @@ var (
 	pageToken   = os.Getenv("FB_PAGE_TOKEN")
 )
 
-type Payload struct {
-	Recipient Recipient `json:"recipient"`
-	Message   Message   `json:"message"`
-}
-type Recipient struct {
-	ID string `json:"id"`
-}
-type Message struct {
-	Text string `json:"text"`
-}
+// type Payload struct {
+// 	Recipient Recipient `json:"recipient"`
+// 	Message   Message   `json:"message"`
+// }
+// type Recipient struct {
+// 	ID string `json:"id"`
+// }
+// type Message struct {
+// 	Text string `json:"text"`
+// }
 
-type FbWebhookCallback struct {
-	Object string `json:"object"`
-	Entry  []struct {
-		ID        string `json:"id"`
-		Time      int64  `json:"time"`
-		Messaging []struct {
-			Sender struct {
-				ID string `json:"id"`
-			} `json:"sender"`
-			Recipient struct {
-				ID string `json:"id"`
-			} `json:"recipient"`
-			Timestamp int64 `json:"timestamp"`
-			Message   struct {
-				Mid  string `json:"mid"`
-				Text string `json:"text"`
-				Nlp  struct {
-					Intents  []interface{} `json:"intents"`
-					Entities struct {
-						WitLocationLocation []struct {
-							ID         string        `json:"id"`
-							Name       string        `json:"name"`
-							Role       string        `json:"role"`
-							Start      int           `json:"start"`
-							End        int           `json:"end"`
-							Body       string        `json:"body"`
-							Confidence float64       `json:"confidence"`
-							Entities   []interface{} `json:"entities"`
-							Suggested  bool          `json:"suggested"`
-							Value      string        `json:"value"`
-							Type       string        `json:"type"`
-						} `json:"wit$location:location"`
-					} `json:"entities"`
-					Traits struct {
-						WitSentiment []struct {
-							ID         string  `json:"id"`
-							Value      string  `json:"value"`
-							Confidence float64 `json:"confidence"`
-						} `json:"wit$sentiment"`
-						WitGreetings []struct {
-							ID         string  `json:"id"`
-							Value      string  `json:"value"`
-							Confidence float64 `json:"confidence"`
-						} `json:"wit$greetings"`
-					} `json:"traits"`
-					DetectedLocales []struct {
-						Locale     string  `json:"locale"`
-						Confidence float64 `json:"confidence"`
-					} `json:"detected_locales"`
-				} `json:"nlp"`
-			} `json:"message"`
-		} `json:"messaging"`
-	} `json:"entry"`
-}
+// type FbWebhookCallback struct {
+// 	Object string `json:"object"`
+// 	Entry  []struct {
+// 		ID        string `json:"id"`
+// 		Time      int64  `json:"time"`
+// 		Messaging []struct {
+// 			Sender struct {
+// 				ID string `json:"id"`
+// 			} `json:"sender"`
+// 			Recipient struct {
+// 				ID string `json:"id"`
+// 			} `json:"recipient"`
+// 			Timestamp int64 `json:"timestamp"`
+// 			Message   struct {
+// 				Mid  string `json:"mid"`
+// 				Text string `json:"text"`
+// 				Nlp  struct {
+// 					Intents  []interface{} `json:"intents"`
+// 					Entities struct {
+// 						WitLocationLocation []struct {
+// 							ID         string        `json:"id"`
+// 							Name       string        `json:"name"`
+// 							Role       string        `json:"role"`
+// 							Start      int           `json:"start"`
+// 							End        int           `json:"end"`
+// 							Body       string        `json:"body"`
+// 							Confidence float64       `json:"confidence"`
+// 							Entities   []interface{} `json:"entities"`
+// 							Suggested  bool          `json:"suggested"`
+// 							Value      string        `json:"value"`
+// 							Type       string        `json:"type"`
+// 						} `json:"wit$location:location"`
+// 					} `json:"entities"`
+// 					Traits struct {
+// 						WitSentiment []struct {
+// 							ID         string  `json:"id"`
+// 							Value      string  `json:"value"`
+// 							Confidence float64 `json:"confidence"`
+// 						} `json:"wit$sentiment"`
+// 						WitGreetings []struct {
+// 							ID         string  `json:"id"`
+// 							Value      string  `json:"value"`
+// 							Confidence float64 `json:"confidence"`
+// 						} `json:"wit$greetings"`
+// 					} `json:"traits"`
+// 					DetectedLocales []struct {
+// 						Locale     string  `json:"locale"`
+// 						Confidence float64 `json:"confidence"`
+// 					} `json:"detected_locales"`
+// 				} `json:"nlp"`
+// 			} `json:"message"`
+// 		} `json:"messaging"`
+// 	} `json:"entry"`
+// }
 
 func writeError(w http.ResponseWriter, code int, msg string) {
 	w.WriteHeader(code)
@@ -95,9 +95,9 @@ func writeError(w http.ResponseWriter, code int, msg string) {
 }
 
 func sendMessage(msg, receiverPsid string) (*http.Response, error) {
-	data := Payload{
-		Recipient: Recipient{ID: receiverPsid},
-		Message:   Message{Text: msg},
+	data := models.Payload{
+		Recipient: models.Recipient{ID: receiverPsid},
+		Message:   models.Message{Text: msg},
 	}
 	payloadBytes, err := json.Marshal(data)
 	if err != nil {
@@ -145,13 +145,17 @@ func ChatbotHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "error reading body")
 	}
 
-	var response FbWebhookCallback
+	var response models.FbMessageCallback
 	json.Unmarshal(bodybytes, &response)
 
 	for _, e := range response.Entry {
 		for _, m := range e.Messaging {
 			log.Printf("Message: %s", m.Message.Text)
-			sendMessage(fmt.Sprintf("You sent me: %s", m.Message.Text), m.Sender.ID)
+			postbackMsg := models.MessageWithPostback{Attachment: models.MessageWithPostbackAttachment{Type: "template", Payload: models.MessageWithPostbackPayload{TemplateType: "generic", Elements: []models.MessageWithPostbackElement{{Title: "Is this what you send to me?", Subtitle: "Tab to answer", Buttons: []models.MessageWithPostbackButton{{Type: "postback", Title: "Yes!", Payload: "yes"}, {Type: "postback", Title: "No!", Payload: "no"}}}}}}}
+			// sendMessage(fmt.Sprintf("You sent me: %s", m.Message.Text), m.Sender.ID)
+
+			marshalled, _ := json.Marshal(postbackMsg)
+			sendMessage(string(marshalled), m.Sender.ID)
 		}
 	}
 	// log.Printf("%+v\n", response.)
@@ -159,5 +163,5 @@ func ChatbotHandler(w http.ResponseWriter, r *http.Request) {
 
 func Main() {
 	uid := "3804650372987546"
-	sendMessage("test kek", uid)
+	sendMessage("Ready!", uid)
 }
