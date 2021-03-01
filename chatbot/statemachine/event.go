@@ -33,11 +33,11 @@ var (
 	}
 	ShowBlogInfo Event = Event{
 		Name:    ShowBlogIntoEventName,
-		Message: "Show blog information",
+		Message: "Blog info",
 	}
 	ShowF1Info Event = Event{
 		Name:    ShowF1InfoEventName,
-		Message: "Show F1 information",
+		Message: "F1 info",
 	}
 )
 

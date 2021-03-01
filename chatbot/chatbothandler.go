@@ -1,11 +1,11 @@
 package chatbot
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/http/httputil"
 	"sort"
 	"viktorbarzin/webhook-handler/chatbot/models"
 	"viktorbarzin/webhook-handler/chatbot/statemachine"
@@ -28,12 +28,33 @@ type ChatbotHandler struct {
 }
 
 func NewChatbotHandler() *ChatbotHandler {
-	return &ChatbotHandler{UserToFSM: map[string]*fsm.FSM{}}
+	c := &ChatbotHandler{UserToFSM: map[string]*fsm.FSM{}}
+	c.setGetStartedButton()
+	return c
+}
+
+func (c *ChatbotHandler) setGetStartedButton() error {
+	getStartedButtonPayload := map[string]map[string]string{
+		"get_started": {"payload": statemachine.GetStartedEventName},
+	}
+	marshalled, err := json.Marshal(getStartedButtonPayload)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshall get started button payload")
+	}
+	reader := bytes.NewReader(marshalled)
+	resp, err := sendRequestURI("https://graph.facebook.com/v2.6/me/messenger_profile", reader)
+	if err != nil {
+		return errors.Wrap(err, "failed sending request")
+	}
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return errors.Wrap(err, "failed reading response body")
+	}
+	glog.Infof("Received response to setting payload button: '%s'", respBody)
+	return nil
 }
 
 func (c *ChatbotHandler) HandleFunc(w http.ResponseWriter, r *http.Request) {
-	requestDump, err := httputil.DumpRequest(r, true)
-	glog.Infof("Processing: '%+v'", string(requestDump))
 	if verifyRequest(w, r) {
 		glog.Info("verify request processed")
 		return
@@ -43,6 +64,7 @@ func (c *ChatbotHandler) HandleFunc(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, 400, "error reading body")
 	}
+	glog.Infof("Processing request body: '%+v'", string(bodybytes))
 
 	messageType, err := getMessageType(string(bodybytes))
 	if err != nil {
@@ -54,10 +76,12 @@ func (c *ChatbotHandler) HandleFunc(w http.ResponseWriter, r *http.Request) {
 	if messageType == Raw {
 		var fbCallbackMsg models.FbMessageCallback
 		json.Unmarshal(bodybytes, &fbCallbackMsg)
+		glog.Infof("processing raw message: %s", string(bodybytes))
 		err = c.processRawMessage(fbCallbackMsg)
 	} else if messageType == Postback {
 		var fbCallbackMsg models.FbMessagePostBackCallback
 		json.Unmarshal(bodybytes, &fbCallbackMsg)
+		glog.Infof("processing postback message: %s", string(bodybytes))
 		err = c.processPostBackMessage(fbCallbackMsg)
 	} else {
 		err = errors.New("received an unsupported message type")

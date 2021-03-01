@@ -50,7 +50,11 @@ func postbackPayloadReader(msg models.PayloadPostback, receiverPsid string) (io.
 }
 
 func sendRequest(body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequest("POST", fbAPIURI+"?access_token="+pageToken, body)
+	return sendRequestURI(fbAPIURI, body)
+}
+
+func sendRequestURI(uri string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest("POST", uri+"?access_token="+pageToken, body)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create POST request struct")
 	}
@@ -65,4 +69,5 @@ func sendRequest(body io.Reader) (*http.Response, error) {
 	respBody, err := ioutil.ReadAll(resp.Body)
 	log.Printf("Response body: %+v", string(respBody))
 	return resp, nil
+
 }
