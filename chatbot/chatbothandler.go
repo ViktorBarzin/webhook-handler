@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"sort"
 	"strings"
 	"viktorbarzin/webhook-handler/chatbot/models"
 	"viktorbarzin/webhook-handler/chatbot/statemachine"
@@ -172,9 +171,9 @@ func respondToUser(userFsm fsm.FSM, recipient string) error {
 	sendRawMessage(recipient, msg)
 
 	// Create postback with options to choose from next
-	transitions := userFsm.AvailableTransitions()
-	sort.Strings(transitions)
-	buttons := transitionsToPostbackButtons(transitions)
+	events := transitionsToEvents(userFsm.AvailableTransitions())
+	events = statemachine.Sorted(events)
+	buttons := eventsToPostbackButtons(events)
 	elements := getPostbackElements("What's next?", "Tap to answer", buttons)
 	// Get consistent button order
 	payload := getPostbackPaylod(recipient, elements)
@@ -184,21 +183,21 @@ func respondToUser(userFsm fsm.FSM, recipient string) error {
 
 // Given a user state machine and a message, try to make a transition and create a response
 func moveFSM(userFsm *fsm.FSM, event string) bool {
-	// subtitle := "Tap to answer"
-
-	// var title string
 	// If transition is allowed
 	if userFsm.Can(event) {
-		// current := userFsm.Current()
 		userFsm.Event(event)
-		// newState := statemachine.StateFromString(userFsm.Current())
-		// title = newState.Message
-		// glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", current, event, userFsm.Current(), userFsm.AvailableTransitions())
 		return true
 	} else {
-		// title = "Oops, I didn't quite get that, please try again\n\n" + statemachine.StateFromString(userFsm.Current()).Message
 		return false
 	}
+}
+
+func transitionsToEvents(transitions []string) []statemachine.Event {
+	res := []statemachine.Event{}
+	for _, t := range transitions {
+		res = append(res, statemachine.EventFromString(t))
+	}
+	return res
 }
 
 func getPostbackElements(title, subtitle string, buttons []models.MessageWithPostbackButton) []models.MessageWithPostbackElement {
@@ -259,6 +258,14 @@ func transitionsToPostbackButtons(transitions []string) []models.MessageWithPost
 		res = append(res, b)
 	}
 	return res
+}
+
+func eventsToPostbackButtons(events []statemachine.Event) []models.MessageWithPostbackButton {
+	transitions := []string{}
+	for _, e := range events {
+		transitions = append(transitions, e.Name)
+	}
+	return transitionsToPostbackButtons(transitions)
 }
 
 func getMessageType(jsonBody string) (MessageType, error) {

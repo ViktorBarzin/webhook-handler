@@ -32,12 +32,7 @@ func ChatBotFSM() *fsm.FSM {
 				Src:  []string{F1StateName},
 				Dst:  F1StateName,
 			},
-			// Reset
-			{
-				Name: BackEventName,
-				Src:  []string{HelloStateName},
-				Dst:  HelloStateName,
-			},
+			// Back
 			{
 				Name: BackEventName,
 				Src:  []string{BlogStateName},
