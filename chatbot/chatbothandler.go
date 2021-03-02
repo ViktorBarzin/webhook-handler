@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sort"
+	"strings"
 	"viktorbarzin/webhook-handler/chatbot/models"
 	"viktorbarzin/webhook-handler/chatbot/statemachine"
 
@@ -55,7 +56,7 @@ func (c *ChatbotHandler) setGetStartedButton() error {
 }
 
 func (c *ChatbotHandler) HandleFunc(w http.ResponseWriter, r *http.Request) {
-	if verifyRequest(w, r) {
+	if isVerifyRequest(w, r) {
 		glog.Info("verify request processed")
 		return
 	}
@@ -88,38 +89,35 @@ func (c *ChatbotHandler) HandleFunc(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		glog.Errorf(fmt.Sprintf("failed processing message: %s", err.Error()))
+	} else {
+		glog.Infof("Successfully processed request with body: '%s'", string(bodybytes))
 	}
 }
 
 func (c *ChatbotHandler) processRawMessage(fbCallbackMsg models.FbMessageCallback) error {
 	for _, e := range fbCallbackMsg.Entry {
 		for _, m := range e.Messaging {
+			// If user is not asking for help, tell that we only understand help raw msg
+			if strings.ToLower(m.Message.Text) != strings.ToLower(statemachine.HelpEventName) {
+				msg := "I am not smart enough to understand that message just yet :/ Please stick to using the buttons I know how to answer :)"
+				resp, err := sendRawMessage(m.Sender.ID, msg)
+				if err != nil {
+					return errors.Wrap(err, "failed to send raw message")
+				}
+				if resp.StatusCode != http.StatusOK {
+					body, _ := ioutil.ReadAll(resp.Body)
+					return errors.New(fmt.Sprintf("sending raw message returned a non-OK status code: %d, response body: %s", resp.StatusCode, body))
+				}
+			}
+
+			// Move FSM with "help"
 			userFsm, ok := c.UserToFSM[m.Sender.ID]
 			if !ok {
 				c.UserToFSM[m.Sender.ID] = statemachine.ChatBotFSM()
 				userFsm = c.UserToFSM[m.Sender.ID]
 			}
-
-			msg := "I am not smart enough to understand any message :/ Please stick to using the buttons I know how to answer :)"
-			if userFsm.Current() == statemachine.InitialStateName {
-				msg = "Thank you reaching out to me. Let's get you started!"
-			}
-			rawMsg := getRawMsg(m.Sender.ID, msg)
-			reader, err := rawMsgPayloadReader(rawMsg, m.Sender.ID)
-			if err != nil {
-				glog.Warningf("failed to create message reader for message: %+v", rawMsg)
-				continue
-			}
-			sendRequest(reader)
-
-			// Send the "Get Started" postback
-			postbackMsg := getPostbackMsg(userFsm, statemachine.Help.Name, m.Sender.ID)
-			reader, err = postbackPayloadReader(postbackMsg, m.Sender.ID)
-			if err != nil {
-				glog.Warningf("failed to create message reader for message: %+v", postbackMsg)
-				continue
-			}
-			sendRequest(reader)
+			moveFSM(userFsm, statemachine.HelpEventName)
+			respondToUser(*userFsm, m.Sender.ID)
 		}
 	}
 	return nil
@@ -133,19 +131,23 @@ func (c *ChatbotHandler) processPostBackMessage(fbCallbackMsg models.FbMessagePo
 				c.UserToFSM[m.Sender.ID] = statemachine.ChatBotFSM()
 				userFsm = c.UserToFSM[m.Sender.ID]
 			}
-			postbackMsg := getPostbackMsg(userFsm, m.Postback.Payload, m.Sender.ID)
-			msg, err := postbackPayloadReader(postbackMsg, m.Sender.ID)
-			if err != nil {
-				glog.Warningf("failed to create message reader for message: %+v", postbackMsg)
-				continue
+
+			// Try make transition
+			oldState := statemachine.StateFromString(userFsm.Current())
+			ok = moveFSM(userFsm, m.Postback.Payload)
+			if ok {
+				glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", oldState.Name, m.Postback.Payload, userFsm.Current(), userFsm.AvailableTransitions())
+			} else {
+				glog.Warningf("failed to make transition from '%s' with msg '%s'. Available transitions are: %+v", oldState.Name, m.Postback.Payload, userFsm.AvailableTransitions())
 			}
-			sendRequest(msg)
+
+			respondToUser(*userFsm, m.Sender.ID)
 		}
 	}
 	return nil
 }
 
-func verifyRequest(w http.ResponseWriter, r *http.Request) bool {
+func isVerifyRequest(w http.ResponseWriter, r *http.Request) bool {
 	urlVals := r.URL.Query()
 	mode := urlVals.Get("hub.mode")
 	token := urlVals.Get("hub.verify_token")
@@ -163,36 +165,43 @@ func verifyRequest(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func getRawMsg(receiver, msg string) models.Payload {
-	return models.Payload{
-		Recipient: models.Recipient{ID: receiver},
-		Message: models.Message{
-			Text: msg,
-		},
-	}
+func respondToUser(userFsm fsm.FSM, recipient string) error {
+	// Send raw message with long explanation
+	currentState := statemachine.StateFromString(userFsm.Current())
+	msg := currentState.Message
+	sendRawMessage(recipient, msg)
+
+	// Create postback with options to choose from next
+	transitions := userFsm.AvailableTransitions()
+	sort.Strings(transitions)
+	buttons := transitionsToPostbackButtons(transitions)
+	elements := getPostbackElements("What's next?", "Tap to answer", buttons)
+	// Get consistent button order
+	payload := getPostbackPaylod(recipient, elements)
+	sendPostBackMessage(recipient, payload)
+	return nil
 }
 
 // Given a user state machine and a message, try to make a transition and create a response
-func getPostbackMsg(userFsm *fsm.FSM, msg string, recipient string) models.PayloadPostback {
-	subtitle := "Tap to answer"
+func moveFSM(userFsm *fsm.FSM, event string) bool {
+	// subtitle := "Tap to answer"
 
-	var title string
+	// var title string
 	// If transition is allowed
-	if userFsm.Can(msg) {
-		current := userFsm.Current()
-		userFsm.Event(msg)
-		newState := statemachine.StateFromString(userFsm.Current())
-		title = newState.Message
-		glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", current, msg, userFsm.Current(), userFsm.AvailableTransitions())
+	if userFsm.Can(event) {
+		// current := userFsm.Current()
+		userFsm.Event(event)
+		// newState := statemachine.StateFromString(userFsm.Current())
+		// title = newState.Message
+		// glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", current, event, userFsm.Current(), userFsm.AvailableTransitions())
+		return true
 	} else {
-		title = "Oops, I didn't quite get that, please try again\n\n" + statemachine.StateFromString(userFsm.Current()).Message
-		glog.Warningf("failed transition from '%ss' with msg: %s", userFsm.Current(), msg)
+		// title = "Oops, I didn't quite get that, please try again\n\n" + statemachine.StateFromString(userFsm.Current()).Message
+		return false
 	}
-	transitions := userFsm.AvailableTransitions()
-	// Get consistent button order
-	sort.Strings(transitions)
-	buttons := transitionsToPostbackButtons(transitions)
+}
 
+func getPostbackElements(title, subtitle string, buttons []models.MessageWithPostbackButton) []models.MessageWithPostbackElement {
 	// Fb allows only 3 buttons per element, so group elements
 	elements := []models.MessageWithPostbackElement{}
 	buttonGroup := []models.MessageWithPostbackButton{}
@@ -206,7 +215,6 @@ func getPostbackMsg(userFsm *fsm.FSM, msg string, recipient string) models.Paylo
 				},
 			)
 			buttonGroup = []models.MessageWithPostbackButton{}
-			// buttonGroup
 		}
 		buttonGroup = append(buttonGroup, b)
 	}
@@ -219,7 +227,10 @@ func getPostbackMsg(userFsm *fsm.FSM, msg string, recipient string) models.Paylo
 			},
 		)
 	}
+	return elements
+}
 
+func getPostbackPaylod(recipient string, elements []models.MessageWithPostbackElement) models.PayloadPostback {
 	return models.PayloadPostback{
 		Recipient: models.Recipient{
 			ID: recipient,

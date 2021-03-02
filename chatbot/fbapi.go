@@ -3,6 +3,7 @@ package chatbot
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -29,17 +30,41 @@ func writeError(w http.ResponseWriter, code int, msg string) {
 	w.Write([]byte(msg))
 }
 
-func rawMsgPayloadReader(msg models.Payload, receiverPsid string) (io.Reader, error) {
-	payloadBytes, err := json.Marshal(msg)
+func sendRawMessage(receiverPsid, msg string) (*http.Response, error) {
+	payload := getRawMessagePayload(receiverPsid, msg)
+	reader, err := payloadReader(payload, receiverPsid)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshal request data")
+		return nil, errors.Wrapf(err, "failed to get raw message payload reader for msg: %s", msg)
 	}
-	glog.Infof("Sending: %s", string(payloadBytes))
-	body := bytes.NewReader(payloadBytes)
-	return body, nil
+	resp, err := sendRequest(reader)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to send request with msg '%s' to uid '%s'", msg, receiverPsid)
+	}
+	return resp, nil
 }
 
-func postbackPayloadReader(msg models.PayloadPostback, receiverPsid string) (io.Reader, error) {
+func sendPostBackMessage(receiverPsid string, payload models.PayloadPostback) (*http.Response, error) {
+	reader, err := payloadReader(payload, receiverPsid)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("failed to create message reader for message: %+v", payload))
+	}
+	resp, err := sendRequest(reader)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to send payload: '%+v' to user: %s", payload, receiverPsid)
+	}
+	return resp, nil
+}
+
+func getRawMessagePayload(receiver, msg string) models.Payload {
+	return models.Payload{
+		Recipient: models.Recipient{ID: receiver},
+		Message: models.Message{
+			Text: msg,
+		},
+	}
+}
+
+func payloadReader(msg interface{}, receiverPsid string) (io.Reader, error) {
 	payloadBytes, err := json.Marshal(msg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal request data")

@@ -41,10 +41,6 @@ var (
 	}
 )
 
-func (s State) String() string {
-	return s.Name
-}
-
 // StateFromString creates state from a string
 func StateFromString(s string) State {
 	switch s {
@@ -61,4 +57,8 @@ func StateFromString(s string) State {
 	default:
 		return InvalidState
 	}
+}
+
+func (s State) String() string {
+	return s.Name
 }
