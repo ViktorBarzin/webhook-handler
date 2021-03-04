@@ -12,31 +12,31 @@ func ChatBotFSM() *fsm.FSM {
 				Dst:  HelloStateName,
 			},
 			// Help Event
-			{
-				Name: HelpEventName,
-				Src:  []string{InitialStateName},
-				Dst:  InitialStateName,
-			},
+			// {
+			// 	Name: HelpEventName,
+			// 	Src:  []string{InitialStateName},
+			// 	Dst:  InitialStateName,
+			// },
 			{
 				Name: HelpEventName,
 				Src:  []string{HelloStateName},
 				Dst:  HelloStateName,
 			},
-			{
-				Name: HelpEventName,
-				Src:  []string{BlogStateName},
-				Dst:  BlogStateName,
-			},
-			{
-				Name: HelpEventName,
-				Src:  []string{F1StateName},
-				Dst:  F1StateName,
-			},
-			{
-				Name: HelpEventName,
-				Src:  []string{GrafanaStateName},
-				Dst:  GrafanaStateName,
-			},
+			// {
+			// 	Name: HelpEventName,
+			// 	Src:  []string{BlogStateName},
+			// 	Dst:  BlogStateName,
+			// },
+			// {
+			// 	Name: HelpEventName,
+			// 	Src:  []string{F1StateName},
+			// 	Dst:  F1StateName,
+			// },
+			// {
+			// 	Name: HelpEventName,
+			// 	Src:  []string{GrafanaStateName},
+			// 	Dst:  GrafanaStateName,
+			// },
 			// Back
 			{
 				Name: BackEventName,
