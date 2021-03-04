@@ -19,6 +19,7 @@ const (
 	ShowBlogIntoEventName    = "ShowBlogInfo"
 	ShowF1InfoEventName      = "ShowF1Info"
 	ShowGrafanaInfoEventName = "ShowGrafanaInfo"
+	ShowHackmdInfoEventName  = "ShowHackmdInfo"
 )
 
 var (
@@ -59,6 +60,11 @@ var (
 			Name:    ShowGrafanaInfoEventName,
 			Message: "Dashboards",
 			orderID: 12,
+		},
+		ShowHackmdInfoEventName: {
+			Name:    ShowHackmdInfoEventName,
+			Message: "Document collab tool",
+			orderID: 13,
 		},
 	}
 )

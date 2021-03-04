@@ -1,0 +1,10 @@
+---
+
+- fsm:
+  events:
+    - event:
+        id: "Hello"
+        message: "How can I help?"
+        from: 
+          - 
+          

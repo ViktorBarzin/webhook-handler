@@ -17,6 +17,7 @@ const (
 	BlogStateName    = "Blog"
 	F1StateName      = "F1"
 	GrafanaStateName = "Grafana"
+	HackmdStateName  = "Hackmd"
 )
 
 var (
@@ -35,15 +36,19 @@ var (
 		},
 		BlogStateName: {
 			Name:    BlogStateName,
-			Message: "To visit my website go to https://viktorbarzin.me",
+			Message: "I have a website where I casually blog on various tech topics. To visit my website go to https://viktorbarzin.me",
 		},
 		F1StateName: {
 			Name:    F1StateName,
-			Message: "To watch F1 streams go to http://f1.viktorbarzin.me",
+			Message: "I have an F1 streaming site, where you can watch F1 streams without annoying pop-ups and ads. \n To watch F1 streams go to http://f1.viktorbarzin.me",
 		},
 		GrafanaStateName: {
 			Name:    GrafanaStateName,
-			Message: "To see my infrastructure dashboards go to https://grafana.viktorbarzin.me/dashboards",
+			Message: "I have some pretty dashboards about my infrastructure. Available at https://grafana.viktorbarzin.me/dashboards",
+		},
+		HackmdStateName: {
+			Name:    HackmdStateName,
+			Message: "Document collaboration tool. Similar to Google Docs. Available at https://hackmd.viktorbarzin.me",
 		},
 	}
 )

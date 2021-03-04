@@ -40,7 +40,7 @@ func ChatBotFSM() *fsm.FSM {
 			// Back
 			{
 				Name: BackEventName,
-				Src:  []string{BlogStateName, F1StateName, GrafanaStateName},
+				Src:  []string{BlogStateName, F1StateName, GrafanaStateName, HackmdStateName},
 				Dst:  HelloStateName,
 			},
 			// Show blog info
@@ -61,6 +61,12 @@ func ChatBotFSM() *fsm.FSM {
 				Name: ShowGrafanaInfoEventName,
 				Src:  []string{HelloStateName},
 				Dst:  GrafanaStateName,
+			},
+			// Show hackmd info
+			{
+				Name: ShowHackmdInfoEventName,
+				Src:  []string{HelloStateName},
+				Dst:  HackmdStateName,
 			},
 		},
 		map[string]fsm.Callback{})
