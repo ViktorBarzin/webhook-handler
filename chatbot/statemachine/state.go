@@ -11,13 +11,14 @@ type State struct {
 
 // State name literals
 const (
-	InvalidStateName = "Invalid"
-	InitialStateName = "Initial"
-	HelloStateName   = "Hello"
-	BlogStateName    = "Blog"
-	F1StateName      = "F1"
-	GrafanaStateName = "Grafana"
-	HackmdStateName  = "Hackmd"
+	InvalidStateName    = "Invalid"
+	InitialStateName    = "Initial"
+	HelloStateName      = "Hello"
+	BlogStateName       = "Blog"
+	F1StateName         = "F1"
+	GrafanaStateName    = "Grafana"
+	HackmdStateName     = "Hackmd"
+	PrivatebinStateName = "Privatebin"
 )
 
 var (
@@ -49,6 +50,10 @@ var (
 		HackmdStateName: {
 			Name:    HackmdStateName,
 			Message: "Document collaboration tool. Similar to Google Docs. Available at https://hackmd.viktorbarzin.me",
+		},
+		PrivatebinStateName: {
+			Name:    PrivatebinStateName,
+			Message: "Share pastes securely. Available at https://pb.viktorbarzin.me",
 		},
 	}
 )

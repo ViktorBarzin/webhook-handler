@@ -20,6 +20,7 @@ const (
 	ShowF1InfoEventName      = "ShowF1Info"
 	ShowGrafanaInfoEventName = "ShowGrafanaInfo"
 	ShowHackmdInfoEventName  = "ShowHackmdInfo"
+	ShowPrivatebinEventName  = "ShowPrivatebinInfo"
 )
 
 var (
@@ -61,10 +62,15 @@ var (
 			Message: "Dashboards",
 			orderID: 12,
 		},
+		ShowPrivatebinEventName: {
+			Name:    ShowPrivatebinEventName,
+			Message: "Create paste",
+			orderID: 13,
+		},
 		ShowHackmdInfoEventName: {
 			Name:    ShowHackmdInfoEventName,
 			Message: "Document collab tool",
-			orderID: 13,
+			orderID: 14,
 		},
 	}
 )
