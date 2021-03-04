@@ -12,12 +12,13 @@ type Event struct {
 }
 
 const (
-	InvalidEventName      = "Invalid"
-	BackEventName         = "Back"
-	GetStartedEventName   = "GetStarted"
-	HelpEventName         = "Help"
-	ShowBlogIntoEventName = "ShowBlogInfo"
-	ShowF1InfoEventName   = "ShowF1Info"
+	InvalidEventName         = "Invalid"
+	BackEventName            = "Back"
+	GetStartedEventName      = "GetStarted"
+	HelpEventName            = "Help"
+	ShowBlogIntoEventName    = "ShowBlogInfo"
+	ShowF1InfoEventName      = "ShowF1Info"
+	ShowGrafanaInfoEventName = "ShowGrafanaInfo"
 )
 
 var (
@@ -52,6 +53,11 @@ var (
 		ShowF1InfoEventName: {
 			Name:    ShowF1InfoEventName,
 			Message: "F1 info",
+			orderID: 20,
+		},
+		ShowGrafanaInfoEventName: {
+			Name:    ShowGrafanaInfoEventName,
+			Message: "Dashboards",
 			orderID: 12,
 		},
 	}
