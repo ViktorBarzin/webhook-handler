@@ -43,6 +43,12 @@ func ChatBotFSM() *fsm.FSM {
 				Src:  []string{BlogStateName, F1StateName, GrafanaStateName, HackmdStateName, PrivatebinStateName},
 				Dst:  HelloStateName,
 			},
+			// Reset
+			{
+				Name: ResetEventName,
+				Src:  []string{HelloStateName},
+				Dst:  InitialStateName,
+			},
 			// Show blog info
 			{
 				Name: ShowBlogIntoEventName,

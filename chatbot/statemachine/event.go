@@ -21,6 +21,7 @@ const (
 	ShowGrafanaInfoEventName = "ShowGrafanaInfo"
 	ShowHackmdInfoEventName  = "ShowHackmdInfo"
 	ShowPrivatebinEventName  = "ShowPrivatebinInfo"
+	ResetEventName           = "Reset"
 )
 
 var (
@@ -71,6 +72,11 @@ var (
 			Name:    ShowHackmdInfoEventName,
 			Message: "Document collab tool",
 			orderID: 14,
+		},
+		ResetEventName: {
+			Name:    ResetEventName,
+			Message: "Reset conversation",
+			orderID: 99,
 		},
 	}
 )

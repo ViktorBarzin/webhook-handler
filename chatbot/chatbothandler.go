@@ -146,6 +146,10 @@ func (c *ChatbotHandler) processPostBackMessage(fbCallbackMsg models.FbMessagePo
 	return nil
 }
 
+func resetFSM(userFsm map[string]*fsm.FSM, userid string) {
+	userFsm[userid] = statemachine.ChatBotFSM()
+}
+
 func isVerifyRequest(w http.ResponseWriter, r *http.Request) bool {
 	urlVals := r.URL.Query()
 	mode := urlVals.Get("hub.mode")
