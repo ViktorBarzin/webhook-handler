@@ -16,6 +16,7 @@ fsm:
     - "Grafana"
     - "Hackmd"
     - "Privatebin"
+    - "KMS"
   destState: "Hello"
 - name: "Reset"
   srcState:
@@ -41,6 +42,10 @@ fsm:
   srcState:
     - "Hello"
   destState: "Privatebin"
+- name: "ShowKMSInfo"
+  srcState:
+    - "Hello"
+  destState: "KMS"
 
           
 ---
@@ -59,6 +64,8 @@ states:
   message: "Document collaboration tool. Similar to Google Docs. Available at https://hackmd.viktorbarzin.me"
 - id: "Privatebin"
   message: "Share pastes securely. Available at https://pb.viktorbarzin.me"
+- id: "KMS"
+  message: "KMS service to license MS Windows and MS Office. Instructions how to use at https://kms.viktorbarzin.me"
 
 
 ---
@@ -72,6 +79,9 @@ events:
 - id: "Help"
   message: "Help"
   orderID: 94 
+- id: "Reset"
+  message: "Reset conversation"
+  orderID: 99
 - id: "ShowBlogInfo"
   message: "Blog info"
   orderID: 11
@@ -87,6 +97,6 @@ events:
 - id: "ShowHackmdInfo"
   message: "Document collab tool"
   orderID: 14
-- id: "Reset"
-  message: "Reset conversation"
-  orderID: 99
+- id: "ShowKMSInfo"
+  message: "KMS service"
+  orderID: 15
