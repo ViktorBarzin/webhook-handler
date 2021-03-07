@@ -1,0 +1,92 @@
+---
+fsm:
+- name: "GetStarted"
+  srcState: 
+    - "Initial"
+  destState: "Hello"
+- name: "Help"
+  srcState:
+    - "Hello"
+  destState: "Hello"
+# Back to Hello state
+- name: "Back"
+  srcState:
+    - "Blog"
+    - "F1"
+    - "Grafana"
+    - "Hackmd"
+    - "Privatebin"
+  destState: "Hello"
+- name: "Reset"
+  srcState:
+    - "Hello"
+  destState: "Initial"
+- name: "ShowBlogInfo"
+  srcState:
+    - "Hello"
+  destState: "Blog"
+- name: "ShowF1Info"
+  srcState:
+    - "Hello"
+  destState: "F1"
+- name: "ShowGrafanaInfo"
+  srcState:
+    - "Hello"
+  destState: "Grafana"
+- name: "ShowHackmdInfo"
+  srcState:
+    - "Hello"
+  destState: "Hackmd"
+- name: "ShowPrivatebinInfo"
+  srcState:
+    - "Hello"
+  destState: "Privatebin"
+
+          
+---
+states:
+- id: "Initial"
+  message: "Let's get started"
+- id: "Hello"
+  message: "How can I help?"
+- id: "Blog"
+  message: "I have a website where I casually blog on various tech topics. To visit my website go to https://viktorbarzin.me"
+- id: "F1"
+  message: "I have an F1 streaming site, where you can watch F1 streams without annoying pop-ups and ads. \n To watch F1 streams go to http://f1.viktorbarzin.me"
+- id: "Grafana"
+  message: "I have some pretty dashboards about my infrastructure. Available at https://grafana.viktorbarzin.me/dashboards"
+- id: "Hackmd"
+  message: "Document collaboration tool. Similar to Google Docs. Available at https://hackmd.viktorbarzin.me"
+- id: "Privatebin"
+  message: "Share pastes securely. Available at https://pb.viktorbarzin.me"
+
+
+---
+events:
+- id: "Back"
+  message: "Back"
+  orderID: 95 
+- id: "GetStarted"
+  message: "Get Started!"
+  orderID: 10 
+- id: "Help"
+  message: "Help"
+  orderID: 94 
+- id: "ShowBlogInfo"
+  message: "Blog info"
+  orderID: 11
+- id: "ShowF1Info"
+  message: "F1 info"
+  orderID: 20
+- id: "ShowGrafanaInfo"
+  message: "Dashboards"
+  orderID: 12
+- id: "ShowPrivatebinInfo"
+  message: "Create paste"
+  orderID: 13
+- id: "ShowHackmdInfo"
+  message: "Document collab tool"
+  orderID: 14
+- id: "Reset"
+  message: "Reset conversation"
+  orderID: 99

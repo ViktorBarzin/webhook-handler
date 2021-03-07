@@ -24,18 +24,22 @@ const (
 
 // ChatbotHandler is a HTTP handler which keeps track of conversations
 type ChatbotHandler struct {
-	UserToFSM map[string]*fsm.FSM
+	UserToFSM  map[string]*statemachine.FSMWithStatesAndEvents
+	ConfigFile string
+	States     []statemachine.State
+	Events     []statemachine.Event
 }
 
-func NewChatbotHandler() *ChatbotHandler {
-	c := &ChatbotHandler{UserToFSM: map[string]*fsm.FSM{}}
+func NewChatbotHandler(configFile string) *ChatbotHandler {
+	c := &ChatbotHandler{UserToFSM: map[string]*statemachine.FSMWithStatesAndEvents{}, ConfigFile: configFile}
 	c.setGetStartedButton()
 	return c
 }
 
 func (c *ChatbotHandler) setGetStartedButton() error {
 	getStartedButtonPayload := map[string]map[string]string{
-		"get_started": {"payload": statemachine.GetStartedEventName},
+		// "get_started": {"payload": statemachine.GetStartedEventName},
+		"get_started": {"payload": "GetStarted"},
 	}
 	marshalled, err := json.Marshal(getStartedButtonPayload)
 	if err != nil {
@@ -97,7 +101,7 @@ func (c *ChatbotHandler) processRawMessage(fbCallbackMsg models.FbMessageCallbac
 	for _, e := range fbCallbackMsg.Entry {
 		for _, m := range e.Messaging {
 			// If user is not asking for help, tell that we only understand help raw msg
-			if strings.ToLower(m.Message.Text) != strings.ToLower(statemachine.HelpEventName) {
+			if strings.ToLower(m.Message.Text) != strings.ToLower("help") {
 				msg := "I am not smart enough to understand that message just yet :/ Please stick to using the buttons I know how to answer :)"
 				resp, err := sendRawMessage(m.Sender.ID, msg)
 				if err != nil {
@@ -112,10 +116,14 @@ func (c *ChatbotHandler) processRawMessage(fbCallbackMsg models.FbMessageCallbac
 			// Move FSM with "help"
 			userFsm, ok := c.UserToFSM[m.Sender.ID]
 			if !ok {
-				c.UserToFSM[m.Sender.ID] = statemachine.ChatBotFSM()
+				f, err := statemachine.ChatBotFSM(c.ConfigFile)
+				if err != nil {
+					return errors.Wrapf(err, "failed to init FSM from config file")
+				}
+				c.UserToFSM[m.Sender.ID] = f
 				userFsm = c.UserToFSM[m.Sender.ID]
 			}
-			moveFSM(userFsm, statemachine.HelpEventName)
+			moveFSM(userFsm.FSM, "Help")
 			respondToUser(*userFsm, m.Sender.ID)
 		}
 	}
@@ -127,17 +135,21 @@ func (c *ChatbotHandler) processPostBackMessage(fbCallbackMsg models.FbMessagePo
 		for _, m := range e.Messaging {
 			userFsm, ok := c.UserToFSM[m.Sender.ID]
 			if !ok {
-				c.UserToFSM[m.Sender.ID] = statemachine.ChatBotFSM()
+				f, err := statemachine.ChatBotFSM(c.ConfigFile)
+				if err != nil {
+					return errors.Wrapf(err, "failed to init FSM from config file")
+				}
+				c.UserToFSM[m.Sender.ID] = f
 				userFsm = c.UserToFSM[m.Sender.ID]
 			}
 
 			// Try make transition
-			oldState := statemachine.StateFromString(userFsm.Current())
-			ok = moveFSM(userFsm, m.Postback.Payload)
+			oldState := userFsm.Current()
+			ok = moveFSM(userFsm.FSM, m.Postback.Payload)
 			if ok {
-				glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", oldState.Name, m.Postback.Payload, userFsm.Current(), userFsm.AvailableTransitions())
+				glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", oldState.Name, m.Postback.Payload, userFsm.Current().Name, userFsm.FSM.AvailableTransitions())
 			} else {
-				glog.Warningf("failed to make transition from '%s' with msg '%s'. Available transitions are: %+v", oldState.Name, m.Postback.Payload, userFsm.AvailableTransitions())
+				glog.Warningf("failed to make transition from '%s' with msg '%s'. Available transitions are: %+v", oldState.Name, m.Postback.Payload, userFsm.FSM.AvailableTransitions())
 			}
 
 			respondToUser(*userFsm, m.Sender.ID)
@@ -146,8 +158,9 @@ func (c *ChatbotHandler) processPostBackMessage(fbCallbackMsg models.FbMessagePo
 	return nil
 }
 
-func resetFSM(userFsm map[string]*fsm.FSM, userid string) {
-	userFsm[userid] = statemachine.ChatBotFSM()
+func (c *ChatbotHandler) resetFSM(userFsm map[string]*statemachine.FSMWithStatesAndEvents, userid string) {
+	f, _ := statemachine.ChatBotFSM(c.ConfigFile)
+	userFsm[userid] = f
 }
 
 func isVerifyRequest(w http.ResponseWriter, r *http.Request) bool {
@@ -168,14 +181,14 @@ func isVerifyRequest(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func respondToUser(userFsm fsm.FSM, recipient string) error {
+func respondToUser(userFsm statemachine.FSMWithStatesAndEvents, recipient string) error {
 	// Send raw message with long explanation
-	currentState := statemachine.StateFromString(userFsm.Current())
+	currentState := userFsm.Current()
 	msg := currentState.Message
 	sendRawMessage(recipient, msg)
 
 	// Create postback with options to choose from next
-	events := transitionsToEvents(userFsm.AvailableTransitions())
+	events := userFsm.AvailableTransitions()
 	events = statemachine.Sorted(events)
 	buttons := eventsToPostbackButtons(events)
 	elements := getPostbackElements("What's next?", "Tap to answer", buttons)
@@ -196,13 +209,13 @@ func moveFSM(userFsm *fsm.FSM, event string) bool {
 	}
 }
 
-func transitionsToEvents(transitions []string) []statemachine.Event {
-	res := []statemachine.Event{}
-	for _, t := range transitions {
-		res = append(res, statemachine.EventFromString(t))
-	}
-	return res
-}
+// func transitionsToEvents(transitions []string) []statemachine.Event {
+// 	res := []statemachine.Event{}
+// 	for _, t := range transitions {
+// 		res = append(res, statemachine.EventFromString(t))
+// 	}
+// 	return res
+// }
 
 func getPostbackElements(title, subtitle string, buttons []models.MessageWithPostbackButton) []models.MessageWithPostbackElement {
 	// Fb allows only 3 buttons per element, so group elements
@@ -250,27 +263,26 @@ func getPostbackPaylod(recipient string, elements []models.MessageWithPostbackEl
 	}
 }
 
-func transitionsToPostbackButtons(transitions []string) []models.MessageWithPostbackButton {
+func eventsToPostbackButtons(events []statemachine.Event) []models.MessageWithPostbackButton {
 	res := []models.MessageWithPostbackButton{}
-	for _, t := range transitions {
-		event := statemachine.EventFromString(t)
+	for _, e := range events {
 		b := models.MessageWithPostbackButton{
 			Type:    "postback",
-			Title:   event.Message,
-			Payload: event.Name,
+			Title:   e.Message,
+			Payload: e.Name,
 		}
 		res = append(res, b)
 	}
 	return res
 }
 
-func eventsToPostbackButtons(events []statemachine.Event) []models.MessageWithPostbackButton {
-	transitions := []string{}
-	for _, e := range events {
-		transitions = append(transitions, e.Name)
-	}
-	return transitionsToPostbackButtons(transitions)
-}
+// func eventsToPostbackButtons(events []statemachine.Event) []models.MessageWithPostbackButton {
+// 	transitions := []string{}
+// 	for _, e := range events {
+// 		transitions = append(transitions, e.Name)
+// 	}
+// 	return transitionsToPostbackButtons(transitions)
+// }
 
 func getMessageType(jsonBody string) (MessageType, error) {
 	var rawMsg map[string]interface{}
