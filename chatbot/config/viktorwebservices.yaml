@@ -17,6 +17,9 @@ fsm:
     - "Hackmd"
     - "Privatebin"
     - "KMS"
+    - "Mail"
+    - "StatusPage"
+    - "Wireguard"
   destState: "Hello"
 - name: "Reset"
   srcState:
@@ -46,6 +49,18 @@ fsm:
   srcState:
     - "Hello"
   destState: "KMS"
+- name: "ShowMailInfo"
+  srcState:
+    - "Hello"
+  destState: "Mail"
+- name: "ShowStatusPageInfo"
+  srcState:
+    - "Hello"
+  destState: "StatusPage"
+- name: "ShowWireguardInfo"
+  srcState:
+    - "Hello"
+  destState: "Wireguard"
 
           
 ---
@@ -66,6 +81,12 @@ states:
   message: "Share pastes securely. Available at https://pb.viktorbarzin.me"
 - id: "KMS"
   message: "KMS service to license MS Windows and MS Office. Instructions how to use at https://kms.viktorbarzin.me"
+- id: "Mail"
+  message: "Send me an email: me@viktorbarzin.me. Please encrypt your mail using my public PGP key you can get at https://viktorbarzin.me/gpg"
+- id: "StatusPage"
+  message: "Check the status of my services at https://status.viktorbarzin.me"
+- id: "Wireguard"
+  message: "Check how to get a VPN config at https://wg.viktorbarzin.me"
 
 
 ---
@@ -100,3 +121,12 @@ events:
 - id: "ShowKMSInfo"
   message: "KMS service"
   orderID: 15
+- id: "ShowMailInfo"
+  message: "Mail info"
+  orderID: 16
+- id: "ShowStatusPageInfo"
+  message: "Status page"
+  orderID: 17
+- id: "ShowWireguardInfo"
+  message: "VPN Config"
+  orderID: 18
