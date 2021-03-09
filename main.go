@@ -42,8 +42,4 @@ func main() {
 
 	glog.Infof("Starting webhook handler on %s", listenAddr)
 	http.ListenAndServe(listenAddr, mux)
-
-	// Testing
-	// chatbot.Main()
-	// statemachine.Main()
 }

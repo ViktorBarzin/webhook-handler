@@ -20,6 +20,7 @@ type MessageType int
 const (
 	Raw MessageType = iota
 	Postback
+	GetStartedMessage = "GetStarted"
 )
 
 // ChatbotHandler is a HTTP handler which keeps track of conversations
@@ -38,8 +39,7 @@ func NewChatbotHandler(configFile string) *ChatbotHandler {
 
 func (c *ChatbotHandler) setGetStartedButton() error {
 	getStartedButtonPayload := map[string]map[string]string{
-		// "get_started": {"payload": statemachine.GetStartedEventName},
-		"get_started": {"payload": "GetStarted"},
+		"get_started": {"payload": GetStartedMessage},
 	}
 	marshalled, err := json.Marshal(getStartedButtonPayload)
 	if err != nil {
