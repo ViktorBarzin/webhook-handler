@@ -23,6 +23,7 @@ const (
 var (
 	verifyToken = os.Getenv("FB_VERIFY_TOKEN")
 	pageToken   = os.Getenv("FB_PAGE_TOKEN")
+	appSecret   = os.Getenv("FB_APP_SECRET")
 )
 
 func writeError(w http.ResponseWriter, code int, msg string) {

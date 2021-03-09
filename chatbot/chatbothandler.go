@@ -2,6 +2,9 @@ package chatbot
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -37,6 +40,35 @@ func NewChatbotHandler(configFile string) *ChatbotHandler {
 	return c
 }
 
+func validSignature(key string, r *http.Request) (bool, string, []byte) {
+	signatureValues, ok := r.Header["X-Hub-Signature"]
+	if !ok {
+		return false, "'X-Hub-Signature' header is not set", []byte{}
+	}
+	if len(signatureValues) == 0 || len(signatureValues) > 1 {
+		return false, fmt.Sprintf("'X-Hub-Signature' must have exactly 1 value. got %d values", len(signatureValues)), []byte{}
+	}
+	signature := signatureValues[0]
+	if len(signature) < 5 || signature[0:5] != "sha1=" {
+		return false, fmt.Sprintf("invalid format of signature. expected: 'sha1=SIGNATURE_VALUE', received %s", signature), []byte{}
+	}
+	signature = signature[5:]
+
+	postData, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return false, "failed to get body for which to calculate hmac", []byte{}
+	}
+	h := hmac.New(sha1.New, []byte(key))
+	h.Write([]byte(postData))
+
+	expected := hex.EncodeToString(h.Sum(nil))
+	matching := expected == signature
+	if !matching {
+		return false, fmt.Sprintf("signature are not matching. got signature %s", signature), []byte{}
+	}
+	return true, "signatures are matching", postData
+}
+
 func (c *ChatbotHandler) setGetStartedButton() error {
 	getStartedButtonPayload := map[string]map[string]string{
 		"get_started": {"payload": GetStartedMessage},
@@ -64,9 +96,12 @@ func (c *ChatbotHandler) HandleFunc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bodybytes, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		writeError(w, 400, "error reading body")
+	ok, reason, bodybytes := validSignature(appSecret, r)
+	if !ok {
+		errorMsg := fmt.Sprintf("failed to verify signatures: %s", reason)
+		glog.Warning(errorMsg)
+		writeError(w, 403, errorMsg)
+		return
 	}
 	glog.Infof("Processing request body: '%+v'", string(bodybytes))
 
@@ -209,14 +244,6 @@ func moveFSM(userFsm *fsm.FSM, event string) bool {
 	}
 }
 
-// func transitionsToEvents(transitions []string) []statemachine.Event {
-// 	res := []statemachine.Event{}
-// 	for _, t := range transitions {
-// 		res = append(res, statemachine.EventFromString(t))
-// 	}
-// 	return res
-// }
-
 func getPostbackElements(title, subtitle string, buttons []models.MessageWithPostbackButton) []models.MessageWithPostbackElement {
 	// Fb allows only 3 buttons per element, so group elements
 	elements := []models.MessageWithPostbackElement{}
@@ -275,14 +302,6 @@ func eventsToPostbackButtons(events []statemachine.Event) []models.MessageWithPo
 	}
 	return res
 }
-
-// func eventsToPostbackButtons(events []statemachine.Event) []models.MessageWithPostbackButton {
-// 	transitions := []string{}
-// 	for _, e := range events {
-// 		transitions = append(transitions, e.Name)
-// 	}
-// 	return transitionsToPostbackButtons(transitions)
-// }
 
 func getMessageType(jsonBody string) (MessageType, error) {
 	var rawMsg map[string]interface{}
