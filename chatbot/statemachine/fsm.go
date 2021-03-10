@@ -11,97 +11,68 @@ import (
 )
 
 type FSMWithStatesAndEvents struct {
-	FSM    *fsm.FSM
-	States map[string]State
-	Events map[string]Event
-}
-
-type EventDescYaml struct {
-	Fsm []struct {
-		Name      string   `yaml:"name"`
-		SrcState  []string `yaml:"srcState"`
-		DestState string   `yaml:"destState"`
-	}
-}
-
-type StateYaml struct {
-	States []State
-}
-
-type EventYaml struct {
-	Events []Event
+	FSM       *fsm.FSM
+	EventDesc []fsm.EventDesc `yaml:"statemachine"`
+	States    []State         `yaml:"states"`
+	Events    []Event         `yaml:"events"`
 }
 
 func ChatBotFSM(configFile string) (*FSMWithStatesAndEvents, error) {
+
 	fileBytes, err := ioutil.ReadFile(configFile)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read config file %s", configFile)
 	}
-	fsm, err := yamlToFSM(fileBytes)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create FSM from contents of file %s", configFile)
-	}
-	return fsm, nil
-}
-
-func yamlToFSM(yamlSpec []byte) (*FSMWithStatesAndEvents, error) {
-	dec := yaml.NewDecoder(bytes.NewReader(yamlSpec))
+	dec := yaml.NewDecoder(bytes.NewReader(fileBytes))
 
 	// Decode FSM
-	var eventDescYaml EventDescYaml
-	if err := dec.Decode(&eventDescYaml); err != nil {
-		return nil, errors.Wrapf(err, "failed to decode FSM")
-	}
-	glog.Infof("Successfully decoded FSM from config file: %+v", eventDescYaml)
+	var f *FSMWithStatesAndEvents = nil
 
-	// Decode States
-	var states StateYaml
-	if err := dec.Decode(&states); err != nil {
-		return nil, errors.Wrapf(err, "failed to decode states list")
+	foundRBACSpec := false
+	// try to find rbac config in the config file
+	for {
+		err = dec.Decode(&f)
+		if err != nil {
+			break
+		}
+		if f != nil {
+			foundRBACSpec = true
+			break
+		}
 	}
-	glog.Infof("Successfully decoded states from config file: %+v", states)
-
-	var events EventYaml
-	if err := dec.Decode(&events); err != nil {
-		return nil, errors.Wrapf(err, "failed to decode events list")
+	if !foundRBACSpec || err != nil {
+		return nil, errors.Errorf("did not find valid FSM config in file %s. Err: %s", configFile, err.Error())
 	}
-	glog.Infof("Successfully decoded events from config file: %+v", events)
-
-	eventDes := eventDescYamlToEventDesc(eventDescYaml)
-	glog.Infof("AAAAA\n\n%+v\n\n", eventDes)
-
-	statesMap := map[string]State{}
-	for _, s := range states.States {
-		statesMap[s.Name] = NewState(s.Name, s.Message)
-	}
-	eventsMap := map[string]Event{}
-	for _, e := range events.Events {
-		eventsMap[e.Name] = NewEvent(e.Name, e.Message, e.OrderID)
-	}
-	return &FSMWithStatesAndEvents{
-		FSM:    fsm.NewFSM("Initial", eventDes, map[string]fsm.Callback{}),
-		States: statesMap,
-		Events: eventsMap,
-	}, nil
+	f.FSM = fsm.NewFSM("Initial", f.EventDesc, map[string]fsm.Callback{})
+	glog.Infof("successfully parsed config file into fsm %+v", f)
+	return f, nil
 }
 
-func eventDescYamlToEventDesc(m EventDescYaml) []fsm.EventDesc {
-	res := []fsm.EventDesc{}
-	for _, e := range m.Fsm {
-		res = append(res, fsm.EventDesc{Name: e.Name, Src: e.SrcState, Dst: e.DestState})
+func (f FSMWithStatesAndEvents) Current() State {
+	res := State{}
+	for _, s := range f.States {
+		if s.Name == f.FSM.Current() {
+			res = s
+		}
 	}
 	return res
 }
 
-func (f FSMWithStatesAndEvents) Current() State {
-	return f.States[f.FSM.Current()]
-}
-
 func (f FSMWithStatesAndEvents) AvailableTransitions() []Event {
 	transitions := f.FSM.AvailableTransitions()
+
+	// eventName -> Event
+	allEvents := map[string]Event{}
+	for _, e := range f.Events {
+		allEvents[e.Name] = e
+	}
+
 	res := []Event{}
+	// pick transitions
 	for _, t := range transitions {
-		res = append(res, f.Events[t])
+		if e, ok := allEvents[t]; ok {
+			res = append(res, e)
+		}
 	}
 	return res
 }

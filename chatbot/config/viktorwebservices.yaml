@@ -1,132 +1,159 @@
 ---
-fsm:
-- name: "GetStarted"
-  srcState: 
-    - "Initial"
-  destState: "Hello"
-- name: "Help"
-  srcState:
-    - "Hello"
-  destState: "Hello"
-# Back to Hello state
-- name: "Back"
-  srcState:
-    - "Blog"
-    - "F1"
-    - "Grafana"
-    - "Hackmd"
-    - "Privatebin"
-    - "KMS"
-    - "Mail"
-    - "StatusPage"
-    - "Wireguard"
-  destState: "Hello"
-- name: "Reset"
-  srcState:
-    - "Hello"
-  destState: "Initial"
-- name: "ShowBlogInfo"
-  srcState:
-    - "Hello"
-  destState: "Blog"
-- name: "ShowF1Info"
-  srcState:
-    - "Hello"
-  destState: "F1"
-- name: "ShowGrafanaInfo"
-  srcState:
-    - "Hello"
-  destState: "Grafana"
-- name: "ShowHackmdInfo"
-  srcState:
-    - "Hello"
-  destState: "Hackmd"
-- name: "ShowPrivatebinInfo"
-  srcState:
-    - "Hello"
-  destState: "Privatebin"
-- name: "ShowKMSInfo"
-  srcState:
-    - "Hello"
-  destState: "KMS"
-- name: "ShowMailInfo"
-  srcState:
-    - "Hello"
-  destState: "Mail"
-- name: "ShowStatusPageInfo"
-  srcState:
-    - "Hello"
-  destState: "StatusPage"
-- name: "ShowWireguardInfo"
-  srcState:
-    - "Hello"
-  destState: "Wireguard"
-
-          
----
 states:
-- id: "Initial"
+- id: &state-initial "Initial"
   message: "Let's get started"
-- id: "Hello"
+- id: &state-hello "Hello"
   message: "How can I help?"
-- id: "Blog"
+- id: &state-blog "Blog"
   message: "I have a website where I casually blog on various tech topics. To visit my website go to https://viktorbarzin.me"
-- id: "F1"
+- id: &state-f1 "F1"
   message: "I have an F1 streaming site, where you can watch F1 streams without annoying pop-ups and ads. \n To watch F1 streams go to http://f1.viktorbarzin.me"
-- id: "Grafana"
+- id: &state-grafana "Grafana"
   message: "I have some pretty dashboards about my infrastructure. Available at https://grafana.viktorbarzin.me/dashboards"
-- id: "Hackmd"
+- id: &state-hackmd "Hackmd"
   message: "Document collaboration tool. Similar to Google Docs. Available at https://hackmd.viktorbarzin.me"
-- id: "Privatebin"
+- id: &state-privatebin "Privatebin"
   message: "Share pastes securely. Available at https://pb.viktorbarzin.me"
-- id: "KMS"
+- id: &state-kms "KMS"
   message: "KMS service to license MS Windows and MS Office. Instructions how to use at https://kms.viktorbarzin.me"
-- id: "Mail"
+- id: &state-mail "Mail"
   message: "Send me an email: me@viktorbarzin.me. Please encrypt your mail using my public PGP key you can get at https://viktorbarzin.me/gpg"
-- id: "StatusPage"
+- id: &state-statuspage "StatusPage"
   message: "Check the status of my services at https://status.viktorbarzin.me"
-- id: "Wireguard"
+- id: &state-wireguard "Wireguard"
   message: "Check how to get a VPN config at https://wg.viktorbarzin.me"
 
-
----
 events:
-- id: "Back"
+- id: &event-back "Back"
   message: "Back"
   orderID: 95 
-- id: "GetStarted"
+- id: &event-getstarted "GetStarted"
   message: "Get Started!"
   orderID: 10 
-- id: "Help"
+- id: &event-help "Help"
   message: "Help"
   orderID: 94 
-- id: "Reset"
+- id: &event-reset "Reset"
   message: "Reset conversation"
   orderID: 99
-- id: "ShowBlogInfo"
+- id: &event-showbloginfo "ShowBlogInfo"
   message: "Blog info"
   orderID: 11
-- id: "ShowF1Info"
+- id: &event-showf1info "ShowF1Info"
   message: "F1 info"
   orderID: 20
-- id: "ShowGrafanaInfo"
+- id: &event-showgrafanainfo "ShowGrafanaInfo"
   message: "Dashboards"
   orderID: 12
-- id: "ShowPrivatebinInfo"
+- id: &event-showprivatebininfo "ShowPrivatebinInfo"
   message: "Create paste"
   orderID: 13
-- id: "ShowHackmdInfo"
+- id: &event-showhackmdinfo "ShowHackmdInfo"
   message: "Document collab tool"
   orderID: 14
-- id: "ShowKMSInfo"
+- id: &event-showkmsinfo "ShowKMSInfo"
   message: "KMS service"
   orderID: 15
-- id: "ShowMailInfo"
+- id: &event-showmailinfo "ShowMailInfo"
   message: "Mail info"
   orderID: 16
-- id: "ShowStatusPageInfo"
+- id: &event-showstatuspagelinfo "ShowStatusPageInfo"
   message: "Status page"
   orderID: 17
-- id: "ShowWireguardInfo"
+- id: &event-showwireguardlinfo "ShowWireguardInfo"
   message: "VPN Config"
   orderID: 18
+
+statemachine:
+- name: *event-getstarted
+  src: 
+    - *state-initial
+  dst: *state-hello
+- name: *event-help
+  src:
+    - *state-hello
+  dst: *state-hello
+# Back to Hello state
+- name: *event-back
+  src:
+    - *state-blog
+    - *state-f1
+    - *state-grafana
+    - *state-hackmd
+    - *state-privatebin
+    - *state-kms
+    - *state-mail
+    - *state-statuspage
+    - *state-wireguard
+  dst: *state-hello
+- name: *event-reset
+  src:
+    - *state-hello
+  dst: *state-initial
+- name: *event-showbloginfo
+  src:
+    - *state-hello
+  dst: *state-blog
+- name: *event-showf1info
+  src:
+    - *state-hello
+  dst: *state-f1
+- name: *event-showgrafanainfo
+  src:
+    - *state-hello
+  dst: *state-grafana
+- name: *event-showhackmdinfo
+  src:
+    - *state-hello
+  dst: *state-hackmd
+- name: *event-showprivatebininfo
+  src:
+    - *state-hello
+  dst: *state-privatebin
+- name: *event-showkmsinfo
+  src:
+    - *state-hello
+  dst: *state-kms
+- name: *event-showmailinfo
+  src:
+    - *state-hello
+  dst: *state-mail
+- name: *event-showstatuspagelinfo
+  src:
+    - *state-hello
+  dst: *state-statuspage
+- name: *event-showwireguardlinfo
+  src:
+    - *state-hello
+  dst: *state-wireguard
+
+---
+users: 
+- &viktor-fbid 
+  id: "viktor-fbid"
+  name: "Viktor-fb"
+
+commands:
+- command: &echo_kek
+    id: "echo-kek"
+    cmd: "echo kek" 
+    prettyName: "echo useful message"
+
+permissions:
+- &run-shell-commands-perm 
+  name: "run-shell-commands-perm"
+  commands:
+    - *echo_kek
+
+roles:
+- &admin-role
+  name: "admin"
+  permissions:
+    - *run-shell-commands-perm
+
+groups:
+- name: "viktor"
+  roles:
+  - *admin-role
+  members: 
+    - *viktor-fbid

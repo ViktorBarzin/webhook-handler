@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"viktorbarzin/webhook-handler/chatbot/auth"
 	"viktorbarzin/webhook-handler/chatbot/models"
 	"viktorbarzin/webhook-handler/chatbot/statemachine"
 
@@ -28,19 +29,42 @@ const (
 
 // ChatbotHandler is a HTTP handler which keeps track of conversations
 type ChatbotHandler struct {
-	UserToFSM  map[string]*statemachine.FSMWithStatesAndEvents
-	ConfigFile string
-	States     []statemachine.State
-	Events     []statemachine.Event
+	UserToFSM   map[string]*statemachine.FSMWithStatesAndEvents
+	ConfigFile  string
+	States      []statemachine.State
+	Events      []statemachine.Event
+	RBACConfig  auth.RBACConfig
+	fsmTemplate statemachine.FSMWithStatesAndEvents
 }
 
-func NewChatbotHandler(configFile string) *ChatbotHandler {
-	c := &ChatbotHandler{UserToFSM: map[string]*statemachine.FSMWithStatesAndEvents{}, ConfigFile: configFile}
+func NewChatbotHandler(configFile string) (*ChatbotHandler, error) {
+	rbac, err := auth.NewRBACConfig(configFile)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to parse config file and create RBAC struct")
+	}
+	f, err := statemachine.ChatBotFSM(configFile)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create chatbot FSM ")
+	}
+	c := &ChatbotHandler{
+		UserToFSM:   map[string]*statemachine.FSMWithStatesAndEvents{},
+		ConfigFile:  configFile,
+		RBACConfig:  rbac,
+		fsmTemplate: *f,
+	}
 	c.setGetStartedButton()
-	return c
+	return c, nil
 }
 
 func validSignature(key string, r *http.Request) (bool, string, []byte) {
+	// if in testing, return true
+	if testEnv != "" {
+		postData, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			return false, "failed to get body for which to calculate hmac", []byte{}
+		}
+		return true, "test mode", postData
+	}
 	signatureValues, ok := r.Header["X-Hub-Signature"]
 	if !ok {
 		return false, "'X-Hub-Signature' header is not set", []byte{}
@@ -151,11 +175,7 @@ func (c *ChatbotHandler) processRawMessage(fbCallbackMsg models.FbMessageCallbac
 			// Move FSM with "help"
 			userFsm, ok := c.UserToFSM[m.Sender.ID]
 			if !ok {
-				f, err := statemachine.ChatBotFSM(c.ConfigFile)
-				if err != nil {
-					return errors.Wrapf(err, "failed to init FSM from config file")
-				}
-				c.UserToFSM[m.Sender.ID] = f
+				c.UserToFSM[m.Sender.ID] = &c.fsmTemplate
 				userFsm = c.UserToFSM[m.Sender.ID]
 			}
 			moveFSM(userFsm.FSM, "Help")
@@ -170,11 +190,7 @@ func (c *ChatbotHandler) processPostBackMessage(fbCallbackMsg models.FbMessagePo
 		for _, m := range e.Messaging {
 			userFsm, ok := c.UserToFSM[m.Sender.ID]
 			if !ok {
-				f, err := statemachine.ChatBotFSM(c.ConfigFile)
-				if err != nil {
-					return errors.Wrapf(err, "failed to init FSM from config file")
-				}
-				c.UserToFSM[m.Sender.ID] = f
+				c.UserToFSM[m.Sender.ID] = &c.fsmTemplate
 				userFsm = c.UserToFSM[m.Sender.ID]
 			}
 

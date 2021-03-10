@@ -34,7 +34,10 @@ func main() {
 	}
 
 	glog.Infof("Initializing chatbot handler with %s config file", *fsmConfigFile)
-	chatbotHandler := chatbot.NewChatbotHandler(*fsmConfigFile)
+	chatbotHandler, err := chatbot.NewChatbotHandler(*fsmConfigFile)
+	if err != nil {
+		glog.Fatalf("Failed to create chatbot handler: %s", err.Error())
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(dockerhubPath, dockerHubHandler)

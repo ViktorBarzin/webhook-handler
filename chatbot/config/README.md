@@ -2,12 +2,12 @@ Config format:
 
 ```yaml
 ---
-fsm:
+statemachine:
 - name: "SomeEventID"  # MUST point to an existing event id
-  srcState:
+  src:
     - "Some source state"  # MUST point to existing state ID
     - "Another source state" # Same ...
-  destState: "Some destination state" # Same
+  dst: "Some destination state" # Same
 - name: ....
 
 ---
@@ -25,14 +25,13 @@ events:
 ```
 
 Caveats which will be addressed at some point:
-- Order of definition must be as shown above i.e 1.fsm, 2.states 3.events
 - Initial state is must have id "Initial" as that's what the FSM expects
 - The "Get Started" button sends "GetStarted" as payload. This means your fsm should begin with:
 
 ```yaml
-fsm:
+statemachine:
 - name: "GetStarted"
-  srcState: 
+  src: 
     - "Initial"
-  destState: "Your entry state ID"
+  dst: "Your entry state ID"
 ```
