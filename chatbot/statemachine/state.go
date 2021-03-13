@@ -1,14 +1,15 @@
 package statemachine
 
+import (
+	"github.com/viktorbarzin/gorbac"
+)
+
 type State struct {
 	// State name for FSM
 	Name string `yaml:"id"`
 	// Message send to user at this state
-	Message string `yaml:"message"`
-}
-
-func (s State) String() string {
-	return s.Name
+	Message     string                 `yaml:"message"`
+	Permissions []gorbac.StdPermission `yaml:"permissions"`
 }
 
 func NewState(name, message string) State {

@@ -10,12 +10,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+
 	"viktorbarzin/webhook-handler/chatbot/auth"
 	"viktorbarzin/webhook-handler/chatbot/models"
 	"viktorbarzin/webhook-handler/chatbot/statemachine"
 
 	"github.com/golang/glog"
-	"github.com/looplab/fsm"
 	"github.com/pkg/errors"
 )
 
@@ -52,7 +52,7 @@ func NewChatbotHandler(configFile string) (*ChatbotHandler, error) {
 		RBACConfig:  rbac,
 		fsmTemplate: *f,
 	}
-	c.setGetStartedButton()
+	// c.setGetStartedButton()
 	return c, nil
 }
 
@@ -178,7 +178,9 @@ func (c *ChatbotHandler) processRawMessage(fbCallbackMsg models.FbMessageCallbac
 				c.UserToFSM[m.Sender.ID] = &c.fsmTemplate
 				userFsm = c.UserToFSM[m.Sender.ID]
 			}
-			moveFSM(userFsm.FSM, "Help")
+			user := c.RBACConfig.WhoAmI(m.Sender.ID)
+			glog.Infof("attempting to send 'help' for user %+v", user)
+			c.moveFSM(user, userFsm, "Help")
 			respondToUser(*userFsm, m.Sender.ID)
 		}
 	}
@@ -196,7 +198,9 @@ func (c *ChatbotHandler) processPostBackMessage(fbCallbackMsg models.FbMessagePo
 
 			// Try make transition
 			oldState := userFsm.Current()
-			ok = moveFSM(userFsm.FSM, m.Postback.Payload)
+			user := c.RBACConfig.WhoAmI(m.Sender.ID)
+			glog.Infof("attempting to send %s for user %+v", m.Postback.Payload, user)
+			ok = c.moveFSM(user, userFsm, m.Postback.Payload)
 			if ok {
 				glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", oldState.Name, m.Postback.Payload, userFsm.Current().Name, userFsm.FSM.AvailableTransitions())
 			} else {
@@ -250,10 +254,20 @@ func respondToUser(userFsm statemachine.FSMWithStatesAndEvents, recipient string
 }
 
 // Given a user state machine and a message, try to make a transition and create a response
-func moveFSM(userFsm *fsm.FSM, event string) bool {
-	// If transition is allowed
-	if userFsm.Can(event) {
-		userFsm.Event(event)
+func (h ChatbotHandler) moveFSM(user auth.User, userFsm *statemachine.FSMWithStatesAndEvents, event string) bool {
+	// If transition is allowed in state machine
+	if userFsm.FSM.Can(event) {
+		// move to state and check permission. if not allowed, revert
+		oldState := userFsm.FSM.Current()
+		userFsm.FSM.Event(event)
+		for _, requiredPerm := range userFsm.Current().Permissions {
+			// if none of the user's roles allow the state perm return false
+			if !h.RBACConfig.IsAllowed(user.ID, requiredPerm) {
+				glog.Infof("user %+v does not have permission %+v for state %+v. returning to %s", user, requiredPerm, userFsm.FSM.Current(), oldState)
+				userFsm.FSM.SetState(oldState)
+				return false
+			}
+		}
 		return true
 	} else {
 		return false

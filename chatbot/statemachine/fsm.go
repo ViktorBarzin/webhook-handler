@@ -3,6 +3,7 @@ package statemachine
 import (
 	"bytes"
 	"io/ioutil"
+	"reflect"
 
 	"github.com/golang/glog"
 	"github.com/looplab/fsm"
@@ -26,7 +27,7 @@ func ChatBotFSM(configFile string) (*FSMWithStatesAndEvents, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(fileBytes))
 
 	// Decode FSM
-	var f *FSMWithStatesAndEvents = nil
+	var f FSMWithStatesAndEvents
 
 	foundRBACSpec := false
 	// try to find rbac config in the config file
@@ -35,7 +36,7 @@ func ChatBotFSM(configFile string) (*FSMWithStatesAndEvents, error) {
 		if err != nil {
 			break
 		}
-		if f != nil {
+		if !reflect.DeepEqual(f, FSMWithStatesAndEvents{}) {
 			foundRBACSpec = true
 			break
 		}
@@ -45,7 +46,7 @@ func ChatBotFSM(configFile string) (*FSMWithStatesAndEvents, error) {
 	}
 	f.FSM = fsm.NewFSM("Initial", f.EventDesc, map[string]fsm.Callback{})
 	glog.Infof("successfully parsed config file into fsm %+v", f)
-	return f, nil
+	return &f, nil
 }
 
 func (f FSMWithStatesAndEvents) Current() State {

@@ -1,9 +1,49 @@
 ---
+permissions:
+- &perm-run-shell-commands
+  idstr: "run-shell-commands-perm"
+- &perm-get-info
+  idstr: "get-info"
+
+commands:
+- id: "echo-kek"
+  cmd: "echo kek" 
+  prettyName: "echo useful message"
+  permissions:
+    - *perm-run-shell-commands
+
+roles:
+- &admin-role
+  id: "admin"
+  permissions:
+    - *perm-run-shell-commands
+    - *perm-get-info
+
+groups:
+- &viktor-group
+  name: "viktor"
+  roles:
+  - *admin-role
+
+users: 
+- id: "__guest"  # default guest user id
+  name: "Guest user"
+- &viktor-fbid 
+  id: "3804650372987546" # my fb psid
+  # roles: 
+  # - *admin-role
+  name: "Viktor-fb"
+  groups:
+    - *viktor-group
+
+---
 states:
 - id: &state-initial "Initial"
   message: "Let's get started"
 - id: &state-hello "Hello"
   message: "How can I help?"
+  # permissions:
+    # - *perm-get-info
 - id: &state-blog "Blog"
   message: "I have a website where I casually blog on various tech topics. To visit my website go to https://viktorbarzin.me"
 - id: &state-f1 "F1"
@@ -126,34 +166,3 @@ statemachine:
   src:
     - *state-hello
   dst: *state-wireguard
-
----
-users: 
-- &viktor-fbid 
-  id: "viktor-fbid"
-  name: "Viktor-fb"
-
-commands:
-- command: &echo_kek
-    id: "echo-kek"
-    cmd: "echo kek" 
-    prettyName: "echo useful message"
-
-permissions:
-- &run-shell-commands-perm 
-  name: "run-shell-commands-perm"
-  commands:
-    - *echo_kek
-
-roles:
-- &admin-role
-  name: "admin"
-  permissions:
-    - *run-shell-commands-perm
-
-groups:
-- name: "viktor"
-  roles:
-  - *admin-role
-  members: 
-    - *viktor-fbid

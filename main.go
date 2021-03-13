@@ -44,5 +44,8 @@ func main() {
 	mux.HandleFunc(chatbot.Path, chatbotHandler.HandleFunc)
 
 	glog.Infof("Starting webhook handler on %s", listenAddr)
-	http.ListenAndServe(listenAddr, mux)
+	err = http.ListenAndServe(listenAddr, mux)
+	if err != nil {
+		glog.Fatalf("Error: %s", err.Error())
+	}
 }
