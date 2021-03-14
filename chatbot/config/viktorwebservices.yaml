@@ -46,7 +46,18 @@ states:
 ###### Setup state machine ###### 
 - id: &state-setup "Setup"
   message: "What are you looking to setup?"
+- id: &state-setup-wireguard "SetupWireguard"
+  message: >
+    I use wireguard as for my VPN. See https://www.wireguard.com/ for more info.
+    
 
+    1. Install wireguard client from https://www.wireguard.com/install/
+
+    2. Go to: https://wg.viktorbarzin.me and create your config (if you don't trust my key generation, feel free to generate your key pair but use the config provided in the sample config)
+
+    3. Wait for approval from admin with further details.
+
+    4. Once your request is approved, you will receive a message from me with the IP address you are allocated.
 ###### End of Setup state machine ###### 
 
 ###### Info state machine ###### 
@@ -97,6 +108,9 @@ events:
 - id: &event-setup "Setup"
   message: "Setup"
   orderID: 11
+- id: &event-setup-wireguard "SetupVPN"
+  message: "Setup VPN"
+  orderID: 12
 #### End of Setup events ####
 #### Info events ####
 - id: &event-showbloginfo "ShowBlogInfo"
@@ -155,6 +169,14 @@ statemachine:
   src:
     - *state-setup
   dst: *state-hello
+- name: *event-setup-wireguard
+  src: 
+    - *state-setup
+  dst: *state-setup-wireguard
+- name: *event-back
+  src:
+    - *state-setup-wireguard
+  dst: *state-setup
 #### End of Setup state machine ####
 #### Info state machine ####
 - name: *event-back
