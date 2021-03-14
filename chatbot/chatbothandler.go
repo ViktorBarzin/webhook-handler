@@ -203,6 +203,15 @@ func (c *ChatbotHandler) processPostBackMessage(fbCallbackMsg models.FbMessagePo
 			ok = c.moveFSM(user, userFsm, m.Postback.Payload)
 			if ok {
 				glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", oldState.Name, m.Postback.Payload, userFsm.Current().Name, userFsm.FSM.AvailableTransitions())
+				// Execute command at current state if allowed
+				if c.RBACConfig.IsAllowedToExecuteBatch(user, userFsm.Current().Commands) {
+					glog.Infof("user %+v is allowed to execute commands: %+v", user, userFsm.Current().Commands)
+					for _, cmd := range userFsm.Current().Commands {
+						Execute(cmd)
+					}
+				} else {
+					glog.Infof("user %+v is not allowed to execute 1 or more of the commands: %+v", user, userFsm.Current().Commands)
+				}
 			} else {
 				glog.Warningf("failed to make transition from '%s' with msg '%s'. Available transitions are: %+v", oldState.Name, m.Postback.Payload, userFsm.FSM.AvailableTransitions())
 			}
@@ -262,7 +271,7 @@ func (h ChatbotHandler) moveFSM(user auth.User, userFsm *statemachine.FSMWithSta
 		userFsm.FSM.Event(event)
 		for _, requiredPerm := range userFsm.Current().Permissions {
 			// if none of the user's roles allow the state perm return false
-			if !h.RBACConfig.IsAllowed(user.ID, requiredPerm) {
+			if !h.RBACConfig.IsAllowed(user, requiredPerm) {
 				glog.Infof("user %+v does not have permission %+v for state %+v. returning to %s", user, requiredPerm, userFsm.FSM.Current(), oldState)
 				userFsm.FSM.SetState(oldState)
 				return false

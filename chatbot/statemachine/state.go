@@ -1,6 +1,8 @@
 package statemachine
 
 import (
+	"viktorbarzin/webhook-handler/chatbot/auth"
+
 	"github.com/viktorbarzin/gorbac"
 )
 
@@ -10,6 +12,7 @@ type State struct {
 	// Message send to user at this state
 	Message     string                 `yaml:"message"`
 	Permissions []gorbac.StdPermission `yaml:"permissions"`
+	Commands    []auth.Command         `yaml:"commands"`
 }
 
 func NewState(name, message string) State {

@@ -175,11 +175,32 @@ func (c RBACConfig) WhoAmI(userId string) User {
 	return res
 }
 
-func (c RBACConfig) IsAllowed(userID string, p gorbac.Permission) bool {
+func (c RBACConfig) IsAllowed(user User, p gorbac.Permission) bool {
 	// glog.Infof("Checking: Have: %+v, Perm: %+v ", userID, p)
-	if c.RBAC.IsGranted(userID, p, nil) {
+	if c.RBAC.IsGranted(user.ID, p, nil) {
 		return true
 	}
-	glog.Infof("FAIL\n\n")
 	return false
+}
+
+func (c RBACConfig) IsAllowedToExecute(user User, cmd Command) bool {
+	allowed := true
+	for _, p := range cmd.Permissions {
+		if !c.IsAllowed(user, p) {
+			allowed = false
+			break
+		}
+	}
+	return allowed
+}
+
+func (c RBACConfig) IsAllowedToExecuteBatch(user User, cmds []Command) bool {
+	allowed := true
+	for _, cmd := range cmds {
+		if !c.IsAllowedToExecute(user, cmd) {
+			allowed = false
+			break
+		}
+	}
+	return allowed
 }

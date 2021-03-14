@@ -9,10 +9,6 @@ const (
 	GuestUserID = "__guest"
 )
 
-type Subject interface {
-	Can(command Command) bool
-}
-
 type RBACConfig struct {
 	Groups      []Group                `yaml:"groups"`
 	Users       []User                 `yaml:"users"`

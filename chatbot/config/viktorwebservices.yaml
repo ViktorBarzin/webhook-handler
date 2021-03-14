@@ -6,7 +6,8 @@ permissions:
   idstr: "get-info"
 
 commands:
-- id: "echo-kek"
+- &cmd-echo-kek
+  id: "echo-kek"
   cmd: "echo kek" 
   prettyName: "echo useful message"
   permissions:
@@ -26,8 +27,8 @@ groups:
   - *admin-role
 
 users: 
-- id: "__guest"  # default guest user id
-  name: "Guest user"
+# - id: "__guest"  # default guest user id
+#   name: "Guest user"
 - &viktor-fbid 
   id: "3804650372987546" # my fb psid
   # roles: 
@@ -44,6 +45,9 @@ states:
   message: "How can I help?"
   # permissions:
     # - *perm-get-info
+  # Commands are executed in order. If user does not have permission for at least 1, none are executed
+  commands:
+  - *cmd-echo-kek
 - id: &state-blog "Blog"
   message: "I have a website where I casually blog on various tech topics. To visit my website go to https://viktorbarzin.me"
 - id: &state-f1 "F1"

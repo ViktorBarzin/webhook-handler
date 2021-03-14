@@ -1,32 +1,51 @@
-Config format:
+# RBAC config format
 
 ```yaml
 ---
-statemachine:
-- name: "SomeEventID"  # MUST point to an existing event id
-  src:
-    - "Some source state"  # MUST point to existing state ID
-    - "Another source state" # Same ...
-  dst: "Some destination state" # Same
-- name: ....
+permissions:
+- idstr: "some-unique-permission-id"
+  .
+  .
+  .
 
----
-states:
-- id: "SomeStateID"  # Used in `fsm` object
-  message: "Message show to user at this state"
-- id: ...
+commands:
+- id: "some-unique-command-id"
+  cmd: "some shell command for the chatbot to execute"
+  prettyName: "pretty name of the command"
+  permissions:
+    - "some-unique-permission-id"  # must refer an existing permission
+  .
+  .
+  .
+roles:
+- id: "some-unique-role-id"
+  permissions:
+    - "some-unique-permissions-id" # must refer an existing permission
+  .
+  .
+  .
+groups:
+- name: "some-unique-group-id"
+  roles:
+    - "some-unique-role-id" # must refer an existing role 
+  .
+  .
+  .
+users:
+- id: "some-unique-user-id"
+  name: "Pretty user name"
+  roles:  # this is optional
+  - "unique-role-id" # must refer an existing role 
+  groups:  # this is optional
+  - "some-unique-group-id" # must refer an existing group
+  
 
----
-events:
-- id: "SomeEventID"  # Used in `fsm` object
-  message: "Message shown to user in form of a postback button"
-  orderID: 10 # When multiple transitions are available, this is their explicit order (lower means higher pri)
-- id: ...
 ```
+Permissions are transitive. 
+I.E if group `A` has permission `p` and user `U` has group `A`, then user `U` is has permission `p`.
 
-Caveats which will be addressed at some point:
-- Initial state is must have id "Initial" as that's what the FSM expects
-- The "Get Started" button sends "GetStarted" as payload. This means your fsm should begin with:
+# Chatbot conversation state machine config format
+(TODO)
 
 ```yaml
 statemachine:
@@ -35,3 +54,7 @@ statemachine:
     - "Initial"
   dst: "Your entry state ID"
 ```
+
+Caveats which will be addressed at some point:
+- Initial state is must have id "Initial" as that's what the FSM expects
+- The "Get Started" button sends "GetStarted" as payload. This means your fsm should begin with:
