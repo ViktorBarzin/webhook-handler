@@ -43,6 +43,13 @@ states:
   message: "Let's get started"
 - id: &state-hello "Hello"
   message: "How can I help?"
+###### Setup state machine ###### 
+- id: &state-setup "Setup"
+  message: "What are you looking to setup?"
+
+###### End of Setup state machine ###### 
+
+###### Info state machine ###### 
 - id: &state-info "Info"
   message: "Get more information about my services."
   # permissions:
@@ -68,6 +75,7 @@ states:
   message: "Check the status of my services at https://status.viktorbarzin.me"
 - id: &state-wireguard "Wireguard"
   message: "Check how to get a VPN config at https://wg.viktorbarzin.me"
+###### End of Info state machine ###### 
 
 events:
 - id: &event-back "Back"
@@ -85,6 +93,12 @@ events:
 - id: &event-reset "Reset"
   message: "Reset conversation"
   orderID: 99
+#### Setup events ####
+- id: &event-setup "Setup"
+  message: "Setup"
+  orderID: 11
+#### End of Setup events ####
+#### Info events ####
 - id: &event-showbloginfo "ShowBlogInfo"
   message: "Blog info"
   orderID: 11
@@ -112,6 +126,7 @@ events:
 - id: &event-showwireguardlinfo "ShowWireguardInfo"
   message: "VPN Config"
   orderID: 18
+#### End of Info events ####
 
 statemachine:
 - name: *event-getstarted
@@ -131,7 +146,17 @@ statemachine:
   src:
     - *state-info
   dst: *state-info
-# Back to Info state
+#### Setup state machine ####
+- name: *event-setup
+  src: 
+    - *state-hello
+  dst: *state-setup
+- name: *event-back
+  src:
+    - *state-setup
+  dst: *state-hello
+#### End of Setup state machine ####
+#### Info state machine ####
 - name: *event-back
   src:
     - *state-blog
@@ -184,3 +209,4 @@ statemachine:
   src:
     - *state-info
   dst: *state-wireguard
+#### End of Info state machine ####
