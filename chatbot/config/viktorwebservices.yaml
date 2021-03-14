@@ -43,11 +43,13 @@ states:
   message: "Let's get started"
 - id: &state-hello "Hello"
   message: "How can I help?"
+- id: &state-info "Info"
+  message: "Get more information about my services."
   # permissions:
     # - *perm-get-info
   # Commands are executed in order. If user does not have permission for at least 1, none are executed
-  commands:
-  - *cmd-echo-kek
+  # commands:
+  # - *cmd-echo-kek
 - id: &state-blog "Blog"
   message: "I have a website where I casually blog on various tech topics. To visit my website go to https://viktorbarzin.me"
 - id: &state-f1 "F1"
@@ -74,6 +76,9 @@ events:
 - id: &event-getstarted "GetStarted"
   message: "Get Started!"
   orderID: 10 
+- id: &event-getinfo "GetInfo"
+  message: "Service Info"
+  orderID: 10
 - id: &event-help "Help"
   message: "Help"
   orderID: 94 
@@ -113,11 +118,20 @@ statemachine:
   src: 
     - *state-initial
   dst: *state-hello
-- name: *event-help
+- name: *event-getinfo
   src:
     - *state-hello
+  dst: *state-info
+# Back to Hello
+- name: *event-back
+  src:
+    - *state-info
   dst: *state-hello
-# Back to Hello state
+- name: *event-help
+  src:
+    - *state-info
+  dst: *state-info
+# Back to Info state
 - name: *event-back
   src:
     - *state-blog
@@ -129,44 +143,44 @@ statemachine:
     - *state-mail
     - *state-statuspage
     - *state-wireguard
-  dst: *state-hello
+  dst: *state-info
 - name: *event-reset
   src:
     - *state-hello
   dst: *state-initial
 - name: *event-showbloginfo
   src:
-    - *state-hello
+    - *state-info
   dst: *state-blog
 - name: *event-showf1info
   src:
-    - *state-hello
+    - *state-info
   dst: *state-f1
 - name: *event-showgrafanainfo
   src:
-    - *state-hello
+    - *state-info
   dst: *state-grafana
 - name: *event-showhackmdinfo
   src:
-    - *state-hello
+    - *state-info
   dst: *state-hackmd
 - name: *event-showprivatebininfo
   src:
-    - *state-hello
+    - *state-info
   dst: *state-privatebin
 - name: *event-showkmsinfo
   src:
-    - *state-hello
+    - *state-info
   dst: *state-kms
 - name: *event-showmailinfo
   src:
-    - *state-hello
+    - *state-info
   dst: *state-mail
 - name: *event-showstatuspagelinfo
   src:
-    - *state-hello
+    - *state-info
   dst: *state-statuspage
 - name: *event-showwireguardlinfo
   src:
-    - *state-hello
+    - *state-info
   dst: *state-wireguard
