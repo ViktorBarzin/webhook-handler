@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strings"
 
 	"viktorbarzin/webhook-handler/chatbot/auth"
 	"viktorbarzin/webhook-handler/chatbot/models"
@@ -159,29 +158,9 @@ func (c *ChatbotHandler) HandleFunc(w http.ResponseWriter, r *http.Request) {
 func (c *ChatbotHandler) processRawMessage(fbCallbackMsg models.FbMessageCallback) error {
 	for _, e := range fbCallbackMsg.Entry {
 		for _, m := range e.Messaging {
-			// If user is not asking for help, tell that we only understand help raw msg
-			if strings.ToLower(m.Message.Text) != strings.ToLower("help") {
-				msg := "I am not smart enough to understand that message just yet :/ Please stick to using the buttons I know how to answer :)"
-				resp, err := sendRawMessage(m.Sender.ID, msg)
-				if err != nil {
-					return errors.Wrap(err, "failed to send raw message")
-				}
-				if resp.StatusCode != http.StatusOK {
-					body, _ := ioutil.ReadAll(resp.Body)
-					return errors.New(fmt.Sprintf("sending raw message returned a non-OK status code: %d, response body: %s", resp.StatusCode, body))
-				}
+			if err := c.processMessage(m.Sender.ID, m.Message.Text); err != nil {
+				return errors.Wrapf(err, "failed processing raw message")
 			}
-
-			// Move FSM with "help"
-			userFsm, ok := c.UserToFSM[m.Sender.ID]
-			if !ok {
-				c.UserToFSM[m.Sender.ID] = &c.fsmTemplate
-				userFsm = c.UserToFSM[m.Sender.ID]
-			}
-			user := c.RBACConfig.WhoAmI(m.Sender.ID)
-			glog.Infof("attempting to send 'help' for user %+v", user)
-			c.moveFSM(user, userFsm, "Help")
-			respondToUser(*userFsm, m.Sender.ID)
 		}
 	}
 	return nil
@@ -190,35 +169,45 @@ func (c *ChatbotHandler) processRawMessage(fbCallbackMsg models.FbMessageCallbac
 func (c *ChatbotHandler) processPostBackMessage(fbCallbackMsg models.FbMessagePostBackCallback) error {
 	for _, e := range fbCallbackMsg.Entry {
 		for _, m := range e.Messaging {
-			userFsm, ok := c.UserToFSM[m.Sender.ID]
-			if !ok {
-				c.UserToFSM[m.Sender.ID] = &c.fsmTemplate
-				userFsm = c.UserToFSM[m.Sender.ID]
+			if err := c.processMessage(m.Sender.ID, m.Postback.Payload); err != nil {
+				return errors.Wrapf(err, "failed processing postback message")
 			}
-
-			// Try make transition
-			oldState := userFsm.Current()
-			user := c.RBACConfig.WhoAmI(m.Sender.ID)
-			glog.Infof("attempting to send %s for user %+v", m.Postback.Payload, user)
-			ok = c.moveFSM(user, userFsm, m.Postback.Payload)
-			if ok {
-				glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", oldState.Name, m.Postback.Payload, userFsm.Current().Name, userFsm.FSM.AvailableTransitions())
-				// Execute command at current state if allowed
-				if c.RBACConfig.IsAllowedToExecuteBatch(user, userFsm.Current().Commands) {
-					glog.Infof("user %+v is allowed to execute commands: %+v", user, userFsm.Current().Commands)
-					for _, cmd := range userFsm.Current().Commands {
-						Execute(cmd)
-					}
-				} else {
-					glog.Infof("user %+v is not allowed to execute 1 or more of the commands: %+v", user, userFsm.Current().Commands)
-				}
-			} else {
-				glog.Warningf("failed to make transition from '%s' with msg '%s'. Available transitions are: %+v", oldState.Name, m.Postback.Payload, userFsm.FSM.AvailableTransitions())
-			}
-
-			respondToUser(*userFsm, m.Sender.ID)
 		}
 	}
+	return nil
+}
+
+func (c *ChatbotHandler) processMessage(senderID, payload string) error {
+	userFsm, ok := c.UserToFSM[senderID]
+	if !ok {
+		c.UserToFSM[senderID] = &c.fsmTemplate
+		userFsm = c.UserToFSM[senderID]
+	}
+
+	// Try make transition
+	oldState := userFsm.Current()
+	user := c.RBACConfig.WhoAmI(senderID)
+	glog.Infof("attempting to send %s for user %+v", payload, user)
+	ok = c.moveFSM(user, userFsm, payload)
+
+	errMsgToSend := ""
+	if ok {
+		glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", oldState.Name, payload, userFsm.Current().Name, userFsm.FSM.AvailableTransitions())
+		// Execute command at current state if allowed
+		if c.RBACConfig.IsAllowedToExecuteBatch(user, userFsm.Current().Commands) {
+			glog.Infof("user %+v is allowed to execute commands: %+v", user, userFsm.Current().Commands)
+			for _, cmd := range userFsm.Current().Commands {
+				Execute(cmd)
+			}
+		} else {
+			glog.Infof("user %+v is not allowed to execute 1 or more of the commands: %+v", user, userFsm.Current().Commands)
+		}
+	} else {
+		glog.Warningf("failed to make transition from '%s' with msg '%s'. Available transitions are: %+v", oldState.Name, payload, userFsm.FSM.AvailableTransitions())
+		errMsgToSend = "I didn't get what you meant there. Please stick to using the buttons unless otherwise asked :-)"
+	}
+
+	respondToUser(*userFsm, senderID, errMsgToSend)
 	return nil
 }
 
@@ -245,10 +234,13 @@ func isVerifyRequest(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func respondToUser(userFsm statemachine.FSMWithStatesAndEvents, recipient string) error {
+func respondToUser(userFsm statemachine.FSMWithStatesAndEvents, recipient, messageToPrepend string) error {
 	// Send raw message with long explanation
 	currentState := userFsm.Current()
-	msg := currentState.Message
+	if messageToPrepend != "" {
+		messageToPrepend += "\n\n"
+	}
+	msg := messageToPrepend + currentState.Message
 	sendRawMessage(recipient, msg)
 
 	// Create postback with options to choose from next
