@@ -10,9 +10,10 @@ type State struct {
 	// State name for FSM
 	Name string `yaml:"id"`
 	// Message send to user at this state
-	Message     string                 `yaml:"message"`
-	Permissions []gorbac.StdPermission `yaml:"permissions"`
-	Commands    []auth.Command         `yaml:"commands"`
+	Message          string                 `yaml:"message"`
+	Permissions      []gorbac.StdPermission `yaml:"permissions"`
+	Commands         []auth.Command         `yaml:"commands"`
+	SpecialStateType SpecialStateType       `yaml:"specialstatetype"`
 }
 
 func NewState(name, message string) State {

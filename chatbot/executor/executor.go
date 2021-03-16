@@ -1,4 +1,4 @@
-package chatbot
+package executor
 
 import (
 	"os/exec"
@@ -7,6 +7,10 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+)
+
+const (
+	InfraCli = "infra_cli"
 )
 
 // Execute runs the given command blocking

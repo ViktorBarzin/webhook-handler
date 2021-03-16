@@ -58,6 +58,20 @@ states:
     3. Wait for approval from admin with further details.
 
     4. Once your request is approved, you will receive a message from me with the IP address you are allocated.
+
+
+    Please send me your client friendly name and public key in the following format (without the '<>'):
+    
+    <client friendly name> <public key>
+
+
+    Example:
+
+    Viktor iOcNe48FpLwOa6jBBs9686K5ViPZmLEaJ7axjGT00Xg=
+
+
+    Once your config is setup, I'll will message you to let you know you can start using your config.
+  specialstatetype: "vpn"  # for more info see specialstate.go
 ###### End of Setup state machine ###### 
 
 ###### Info state machine ###### 

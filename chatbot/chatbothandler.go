@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"viktorbarzin/webhook-handler/chatbot/auth"
+	"viktorbarzin/webhook-handler/chatbot/executor"
 	"viktorbarzin/webhook-handler/chatbot/models"
 	"viktorbarzin/webhook-handler/chatbot/statemachine"
 
@@ -19,6 +20,13 @@ import (
 )
 
 type MessageType int
+type MoveFSMResult struct {
+	Ok            bool
+	CmdOutput     string
+	PrintStateMsg bool
+	// String to append to CmdOutput
+	AdditionalMsg string
+}
 
 const (
 	Raw MessageType = iota
@@ -188,26 +196,30 @@ func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 	oldState := userFsm.Current()
 	user := c.RBACConfig.WhoAmI(senderID)
 	glog.Infof("attempting to send %s for user %+v", payload, user)
-	ok = c.moveFSM(user, userFsm, payload)
+	moveFSMRes, err := c.moveFSM(user, userFsm, payload)
 
-	errMsgToSend := ""
-	if ok {
+	msgToPrepend := ""
+	printFSMState := moveFSMRes.PrintStateMsg
+	if err == nil {
+		if moveFSMRes.Ok && moveFSMRes.CmdOutput != "" {
+			msgToPrepend = fmt.Sprintf("Command output: ```\n%s\n```\n%s", moveFSMRes.CmdOutput, moveFSMRes.AdditionalMsg)
+		}
 		glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", oldState.Name, payload, userFsm.Current().Name, userFsm.FSM.AvailableTransitions())
 		// Execute command at current state if allowed
 		if c.RBACConfig.IsAllowedToExecuteBatch(user, userFsm.Current().Commands) {
 			glog.Infof("user %+v is allowed to execute commands: %+v", user, userFsm.Current().Commands)
 			for _, cmd := range userFsm.Current().Commands {
-				Execute(cmd)
+				executor.Execute(cmd)
 			}
 		} else {
 			glog.Infof("user %+v is not allowed to execute 1 or more of the commands: %+v", user, userFsm.Current().Commands)
 		}
 	} else {
 		glog.Warningf("failed to make transition from '%s' with msg '%s'. Available transitions are: %+v", oldState.Name, payload, userFsm.FSM.AvailableTransitions())
-		errMsgToSend = "I didn't get what you meant there. Please stick to using the buttons unless otherwise asked :-)"
+		msgToPrepend = fmt.Sprintf("I didn't get what you meant there. Please stick to using the buttons unless otherwise asked :-)\n\nError I had: %s", err.Error())
 	}
 
-	respondToUser(*userFsm, senderID, errMsgToSend)
+	respondToUser(*userFsm, senderID, msgToPrepend, printFSMState)
 	return nil
 }
 
@@ -234,13 +246,17 @@ func isVerifyRequest(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func respondToUser(userFsm statemachine.FSMWithStatesAndEvents, recipient, messageToPrepend string) error {
+func respondToUser(userFsm statemachine.FSMWithStatesAndEvents, recipient, messageToPrepend string, printFSMState bool) error {
 	// Send raw message with long explanation
 	currentState := userFsm.Current()
 	if messageToPrepend != "" {
 		messageToPrepend += "\n\n"
 	}
-	msg := messageToPrepend + currentState.Message
+	statemsg := ""
+	if printFSMState {
+		statemsg = currentState.Message
+	}
+	msg := messageToPrepend + statemsg
 	sendRawMessage(recipient, msg)
 
 	// Create postback with options to choose from next
@@ -255,23 +271,37 @@ func respondToUser(userFsm statemachine.FSMWithStatesAndEvents, recipient, messa
 }
 
 // Given a user state machine and a message, try to make a transition and create a response
-func (h ChatbotHandler) moveFSM(user auth.User, userFsm *statemachine.FSMWithStatesAndEvents, event string) bool {
+func (h ChatbotHandler) moveFSM(user auth.User, userFsm *statemachine.FSMWithStatesAndEvents, event string) (MoveFSMResult, error) {
 	// If transition is allowed in state machine
 	if userFsm.FSM.Can(event) {
 		// move to state and check permission. if not allowed, revert
 		oldState := userFsm.FSM.Current()
-		userFsm.FSM.Event(event)
+		err := userFsm.FSM.Event(event)
+		if err != nil {
+			return MoveFSMResult{Ok: false, PrintStateMsg: true}, errors.Wrapf(err, "failed to move")
+		}
 		for _, requiredPerm := range userFsm.Current().Permissions {
 			// if none of the user's roles allow the state perm return false
 			if !h.RBACConfig.IsAllowed(user, requiredPerm) {
-				glog.Infof("user %+v does not have permission %+v for state %+v. returning to %s", user, requiredPerm, userFsm.FSM.Current(), oldState)
+				errMsg := fmt.Sprintf("user %+v does not have permission %+v for state %+v. returning to %s", user, requiredPerm, userFsm.FSM.Current(), oldState)
+				glog.Infof(errMsg)
 				userFsm.FSM.SetState(oldState)
-				return false
+				return MoveFSMResult{Ok: false, PrintStateMsg: true}, fmt.Errorf(errMsg)
 			}
 		}
-		return true
+		return MoveFSMResult{Ok: true, PrintStateMsg: true}, nil
 	} else {
-		return false
+		// Uncomment below to enable special state handling
+		// if callback, ok := statemachine.SpecialStateTypeCallback[userFsm.Current().SpecialStateType]; ok {
+		// 	glog.Infof("executing special state handler for state %+v, event: %s", userFsm.Current(), event)
+		// 	output, err := callback(event)
+		// 	if err != nil {
+		// 		return MoveFSMResult{Ok: false, PrintStateMsg: false}, errors.Wrapf(err, "failed to execute special callback")
+		// 	}
+		// 	additionalMsg := "Successfully added your config!\n\nThe last thing you need to do is update the [Interface] IP address in your config. Please set it to match the one in the command output above.\n\nOnce you do that you are ready to go! Please wait for a couple of minutes before using your new config so the backend system changes can propagate."
+		// 	return MoveFSMResult{Ok: true, CmdOutput: output, PrintStateMsg: false, AdditionalMsg: additionalMsg}, nil
+		// }
+		return MoveFSMResult{Ok: false, PrintStateMsg: true}, fmt.Errorf("cannot process %s", event)
 	}
 }
 
