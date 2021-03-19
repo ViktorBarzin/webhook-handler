@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"viktorbarzin/webhook-handler/chatbot"
+	"viktorbarzin/webhook-handler/chatbot/fbapi"
 
 	"github.com/golang/glog"
 )
@@ -41,7 +42,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(dockerhubPath, dockerHubHandler)
-	mux.HandleFunc(chatbot.Path, chatbotHandler.HandleFunc)
+	mux.HandleFunc(fbapi.HandlerPath, chatbotHandler.HandleFunc)
 
 	glog.Infof("Starting webhook handler on %s", listenAddr)
 	err = http.ListenAndServe(listenAddr, mux)

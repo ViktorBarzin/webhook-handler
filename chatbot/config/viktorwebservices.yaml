@@ -71,7 +71,7 @@ states:
 
 
     Once your config is setup, I'll will message you to let you know you can start using your config.
-  specialstatetype: "vpn"  # for more info see specialstate.go
+  defaultHandler: *cmd-echo-kek
 ###### End of Setup state machine ###### 
 
 ###### Info state machine ###### 

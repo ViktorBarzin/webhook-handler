@@ -129,6 +129,14 @@ func uniqueGroups(groups []Group) []Group {
 	return res
 }
 
+func ToPermissions(ps []gorbac.StdPermission) []gorbac.Permission {
+	res := make([]gorbac.Permission, len(ps))
+	for i, v := range ps {
+		res[i] = v
+	}
+	return res
+}
+
 func initRBAC(rbac *gorbac.RBAC, users []User) {
 	// Init roles and permissions
 	for _, u := range users {
@@ -181,6 +189,16 @@ func (c RBACConfig) IsAllowed(user User, p gorbac.Permission) bool {
 		return true
 	}
 	return false
+}
+
+func (c RBACConfig) IsAllowedMany(user User, ps []gorbac.Permission) bool {
+	for _, requiredPerm := range ps {
+		// if none of the user's roles allow the state perm return false
+		if !c.IsAllowed(user, requiredPerm) {
+			return false
+		}
+	}
+	return true
 }
 
 func (c RBACConfig) IsAllowedToExecute(user User, cmd Command) bool {

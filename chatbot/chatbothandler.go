@@ -1,10 +1,6 @@
 package chatbot
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -12,6 +8,7 @@ import (
 
 	"viktorbarzin/webhook-handler/chatbot/auth"
 	"viktorbarzin/webhook-handler/chatbot/executor"
+	"viktorbarzin/webhook-handler/chatbot/fbapi"
 	"viktorbarzin/webhook-handler/chatbot/models"
 	"viktorbarzin/webhook-handler/chatbot/statemachine"
 
@@ -31,7 +28,6 @@ type MoveFSMResult struct {
 const (
 	Raw MessageType = iota
 	Postback
-	GetStartedMessage = "GetStarted"
 )
 
 // ChatbotHandler is a HTTP handler which keeps track of conversations
@@ -59,79 +55,26 @@ func NewChatbotHandler(configFile string) (*ChatbotHandler, error) {
 		RBACConfig:  rbac,
 		fsmTemplate: *f,
 	}
-	// c.setGetStartedButton()
+	fbapi.SetGetStartedButton()
 	return c, nil
 }
 
-func validSignature(key string, r *http.Request) (bool, string, []byte) {
-	// if in testing, return true
-	if testEnv != "" {
-		postData, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			return false, "failed to get body for which to calculate hmac", []byte{}
-		}
-		return true, "test mode", postData
-	}
-	signatureValues, ok := r.Header["X-Hub-Signature"]
-	if !ok {
-		return false, "'X-Hub-Signature' header is not set", []byte{}
-	}
-	if len(signatureValues) == 0 || len(signatureValues) > 1 {
-		return false, fmt.Sprintf("'X-Hub-Signature' must have exactly 1 value. got %d values", len(signatureValues)), []byte{}
-	}
-	signature := signatureValues[0]
-	if len(signature) < 5 || signature[0:5] != "sha1=" {
-		return false, fmt.Sprintf("invalid format of signature. expected: 'sha1=SIGNATURE_VALUE', received %s", signature), []byte{}
-	}
-	signature = signature[5:]
-
-	postData, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return false, "failed to get body for which to calculate hmac", []byte{}
-	}
-	h := hmac.New(sha1.New, []byte(key))
-	h.Write([]byte(postData))
-
-	expected := hex.EncodeToString(h.Sum(nil))
-	matching := expected == signature
-	if !matching {
-		return false, fmt.Sprintf("signature are not matching. got signature %s", signature), []byte{}
-	}
-	return true, "signatures are matching", postData
-}
-
-func (c *ChatbotHandler) setGetStartedButton() error {
-	getStartedButtonPayload := map[string]map[string]string{
-		"get_started": {"payload": GetStartedMessage},
-	}
-	marshalled, err := json.Marshal(getStartedButtonPayload)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshall get started button payload")
-	}
-	reader := bytes.NewReader(marshalled)
-	resp, err := sendRequestURI("https://graph.facebook.com/v2.6/me/messenger_profile", reader)
-	if err != nil {
-		return errors.Wrap(err, "failed sending request")
-	}
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return errors.Wrap(err, "failed reading response body")
-	}
-	glog.Infof("Received response to setting payload button: '%s'", respBody)
-	return nil
-}
-
 func (c *ChatbotHandler) HandleFunc(w http.ResponseWriter, r *http.Request) {
-	if isVerifyRequest(w, r) {
+	if fbapi.IsVerifyRequest(w, r) {
 		glog.Info("verify request processed")
 		return
 	}
 
-	ok, reason, bodybytes := validSignature(appSecret, r)
+	ok, reason := fbapi.ValidSignature(r)
 	if !ok {
 		errorMsg := fmt.Sprintf("failed to verify signatures: %s", reason)
 		glog.Warning(errorMsg)
-		writeError(w, 403, errorMsg)
+		fbapi.ResponseWrite(w, 403, errorMsg)
+		return
+	}
+	bodybytes, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		glog.Errorf(fmt.Sprintf("failed to read body for request %+v", r))
 		return
 	}
 	glog.Infof("Processing request body: '%+v'", string(bodybytes))
@@ -140,6 +83,7 @@ func (c *ChatbotHandler) HandleFunc(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		err = errors.Wrap(err, "failed to get message type")
 		glog.Errorf(fmt.Sprintf("failed processing request: %s", err.Error()))
+		fbapi.ResponseWrite(w, 400, "Unsupported message type")
 		return
 	}
 
@@ -154,12 +98,17 @@ func (c *ChatbotHandler) HandleFunc(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("processing postback message: %s", string(bodybytes))
 		err = c.processPostBackMessage(fbCallbackMsg)
 	} else {
-		err = errors.New("received an unsupported message type")
+		errMsg := "received an unsupported message type"
+		glog.Warning(errMsg)
+		fbapi.ResponseWrite(w, 400, errMsg)
+		return
 	}
 	if err != nil {
 		glog.Errorf(fmt.Sprintf("failed processing message: %s", err.Error()))
+		fbapi.ResponseWrite(w, 500, "Internal error")
 	} else {
 		glog.Infof("Successfully processed request with body: '%s'", string(bodybytes))
+		fbapi.ResponseWrite(w, 200, "OK")
 	}
 }
 
@@ -196,14 +145,9 @@ func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 	oldState := userFsm.Current()
 	user := c.RBACConfig.WhoAmI(senderID)
 	glog.Infof("attempting to send %s for user %+v", payload, user)
-	moveFSMRes, err := c.moveFSM(user, userFsm, payload)
+	moveFSMResult, err := c.moveFSM(user, userFsm, payload)
 
-	msgToPrepend := ""
-	printFSMState := moveFSMRes.PrintStateMsg
 	if err == nil {
-		if moveFSMRes.Ok && moveFSMRes.CmdOutput != "" {
-			msgToPrepend = fmt.Sprintf("Command output: ```\n%s\n```\n%s", moveFSMRes.CmdOutput, moveFSMRes.AdditionalMsg)
-		}
 		glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", oldState.Name, payload, userFsm.Current().Name, userFsm.FSM.AvailableTransitions())
 		// Execute command at current state if allowed
 		if c.RBACConfig.IsAllowedToExecuteBatch(user, userFsm.Current().Commands) {
@@ -216,10 +160,9 @@ func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 		}
 	} else {
 		glog.Warningf("failed to make transition from '%s' with msg '%s'. Available transitions are: %+v", oldState.Name, payload, userFsm.FSM.AvailableTransitions())
-		msgToPrepend = fmt.Sprintf("I didn't get what you meant there. Please stick to using the buttons unless otherwise asked :-)\n\nError I had: %s", err.Error())
 	}
 
-	respondToUser(*userFsm, senderID, msgToPrepend, printFSMState)
+	respondToUser(senderID, *userFsm, moveFSMResult)
 	return nil
 }
 
@@ -228,36 +171,21 @@ func (c *ChatbotHandler) resetFSM(userFsm map[string]*statemachine.FSMWithStates
 	userFsm[userid] = f
 }
 
-func isVerifyRequest(w http.ResponseWriter, r *http.Request) bool {
-	urlVals := r.URL.Query()
-	mode := urlVals.Get("hub.mode")
-	token := urlVals.Get("hub.verify_token")
-	challenge := urlVals.Get("hub.challenge")
-	if mode != "" && token != "" {
-		if mode == "subscribe" && token == verifyToken {
-			glog.Info("webhook verified")
-			w.WriteHeader(200)
-			w.Write([]byte(challenge))
-		} else {
-			w.WriteHeader(403)
-		}
-		return true
-	}
-	return false
-}
-
-func respondToUser(userFsm statemachine.FSMWithStatesAndEvents, recipient, messageToPrepend string, printFSMState bool) error {
+func respondToUser(recipient string, userFsm statemachine.FSMWithStatesAndEvents, moveFSMResult MoveFSMResult) error {
 	// Send raw message with long explanation
-	currentState := userFsm.Current()
-	if messageToPrepend != "" {
-		messageToPrepend += "\n\n"
+	msgToSend := ""
+	if moveFSMResult.CmdOutput != "" {
+		// if cmd output is non-empty send that
+		msgToSend = moveFSMResult.CmdOutput
+		if moveFSMResult.AdditionalMsg != "" {
+			// If appendix is non-empty, append it ot msg
+			msgToSend += moveFSMResult.AdditionalMsg
+		}
+	} else {
+		currentState := userFsm.Current()
+		msgToSend = currentState.Message
 	}
-	statemsg := ""
-	if printFSMState {
-		statemsg = currentState.Message
-	}
-	msg := messageToPrepend + statemsg
-	sendRawMessage(recipient, msg)
+	fbapi.SendRawMessage(recipient, msgToSend)
 
 	// Create postback with options to choose from next
 	events := userFsm.AvailableTransitions()
@@ -266,7 +194,7 @@ func respondToUser(userFsm statemachine.FSMWithStatesAndEvents, recipient, messa
 	elements := getPostbackElements("What's next?", "Tap to answer", buttons)
 	// Get consistent button order
 	payload := getPostbackPaylod(recipient, elements)
-	sendPostBackMessage(recipient, payload)
+	fbapi.SendPostBackMessage(recipient, payload)
 	return nil
 }
 
@@ -278,18 +206,14 @@ func (h ChatbotHandler) moveFSM(user auth.User, userFsm *statemachine.FSMWithSta
 		oldState := userFsm.FSM.Current()
 		err := userFsm.FSM.Event(event)
 		if err != nil {
-			return MoveFSMResult{Ok: false, PrintStateMsg: true}, errors.Wrapf(err, "failed to move")
+			return MoveFSMResult{}, errors.Wrapf(err, "failed to move")
 		}
-		for _, requiredPerm := range userFsm.Current().Permissions {
-			// if none of the user's roles allow the state perm return false
-			if !h.RBACConfig.IsAllowed(user, requiredPerm) {
-				errMsg := fmt.Sprintf("user %+v does not have permission %+v for state %+v. returning to %s", user, requiredPerm, userFsm.FSM.Current(), oldState)
-				glog.Infof(errMsg)
-				userFsm.FSM.SetState(oldState)
-				return MoveFSMResult{Ok: false, PrintStateMsg: true}, fmt.Errorf(errMsg)
-			}
+		// If user is not allowed to be in new state, revert
+		if !h.RBACConfig.IsAllowedMany(user, auth.ToPermissions(userFsm.Current().Permissions)) {
+			userFsm.FSM.SetState(oldState)
+			return MoveFSMResult{}, fmt.Errorf("user %+v does not have permission for state %+v. returning to %s", user, userFsm.FSM.Current(), oldState)
 		}
-		return MoveFSMResult{Ok: true, PrintStateMsg: true}, nil
+		return MoveFSMResult{}, nil
 	} else {
 		// Uncomment below to enable special state handling
 		// if callback, ok := statemachine.SpecialStateTypeCallback[userFsm.Current().SpecialStateType]; ok {
@@ -301,7 +225,7 @@ func (h ChatbotHandler) moveFSM(user auth.User, userFsm *statemachine.FSMWithSta
 		// 	additionalMsg := "Successfully added your config!\n\nThe last thing you need to do is update the [Interface] IP address in your config. Please set it to match the one in the command output above.\n\nOnce you do that you are ready to go! Please wait for a couple of minutes before using your new config so the backend system changes can propagate."
 		// 	return MoveFSMResult{Ok: true, CmdOutput: output, PrintStateMsg: false, AdditionalMsg: additionalMsg}, nil
 		// }
-		return MoveFSMResult{Ok: false, PrintStateMsg: true}, fmt.Errorf("cannot process %s", event)
+		return MoveFSMResult{}, fmt.Errorf("cannot process %s", event)
 	}
 }
 
