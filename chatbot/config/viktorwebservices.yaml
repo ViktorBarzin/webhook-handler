@@ -8,7 +8,7 @@ permissions:
 commands:
 - &cmd-echo-kek
   id: "echo-kek"
-  cmd: "echo kek" 
+  cmd: 'echo input is: $1' 
   prettyName: "echo useful message"
   permissions:
     - *perm-run-shell-commands

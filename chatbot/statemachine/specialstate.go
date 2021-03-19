@@ -58,7 +58,7 @@ func VPNStateTypeHandler(event string) (string, error) {
 	cmd := fmt.Sprintf("%s -use-case vpn -vpn-client-name %s -vpn-pub-key %s", executor.InfraCli, friendlyName, pubKey)
 	glog.Infof("running command to generate client config: '%s'", cmd)
 
-	output, err := executor.Execute(auth.Command{PrettyName: "Add Wireguard client config", CMD: cmd})
+	output, err := executor.Execute(auth.Command{PrettyName: "Add Wireguard client config", CMD: cmd}, "kek")
 	if err != nil {
 		return "", errors.Wrapf(err, "creating client config failed")
 	}

@@ -50,7 +50,7 @@ func ChatBotFSM(configFile string) (*FSMWithStatesAndEvents, error) {
 }
 
 func (f FSMWithStatesAndEvents) Current() State {
-	res := State{}
+	res := State{Name: "Unknown", Message: "Hmm confused..."}
 	for _, s := range f.States {
 		if s.Name == f.FSM.Current() {
 			res = s

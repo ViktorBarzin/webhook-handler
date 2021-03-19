@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 	"viktorbarzin/webhook-handler/chatbot/auth"
@@ -11,23 +12,13 @@ import (
 
 const (
 	InfraCli = "infra_cli"
+	bashCli  = "/bin/sh"
 )
 
 // Execute runs the given command blocking
-func Execute(cmd auth.Command) (string, error) {
-	glog.Infof("executing '%s': '%s'", cmd.PrettyName, cmd.CMD)
-	cmdArgs := strings.Split(cmd.CMD, " ")
-	if len(cmdArgs) == 0 {
-		// nothing to execute
-		glog.Infof("skipping executing empty command: %+v", cmd)
-		return "", nil
-	}
-	binary, err := exec.LookPath(cmdArgs[0])
-	if err != nil {
-		return "", errors.Wrapf(err, "failed to find binary")
-	}
-
-	c := exec.Command(binary, cmdArgs[1:]...)
+func Execute(cmd auth.Command, input string) (string, error) {
+	bashCmd := fmt.Sprintf("echo %s | while read line; do %s $line; done", input, cmd.CMD)
+	c := exec.Command("/bin/sh", "-c", bashCmd)
 	glog.Infof(strings.Repeat("-", 40))
 	glog.Infof("executing: '%s'", c.String())
 	output, err := c.CombinedOutput()

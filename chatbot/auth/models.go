@@ -24,6 +24,9 @@ type Command struct {
 	PrettyName  string                 `yaml:"prettyName"`
 	CMD         string                 `yaml:"cmd"`
 	Permissions []gorbac.StdPermission `yaml:"permissions"`
+	// Message to send the user after the command succeeded
+	SuccessExplanation string `yaml:"onSuccess"`
+	ShowCmdOutput      bool   `yaml:"showCmdOutput"`
 }
 
 // Role on the RBAC e.g "admin"

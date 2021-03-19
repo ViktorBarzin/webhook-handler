@@ -212,7 +212,7 @@ func (c RBACConfig) IsAllowedToExecute(user User, cmd Command) bool {
 	return allowed
 }
 
-func (c RBACConfig) IsAllowedToExecuteBatch(user User, cmds []Command) bool {
+func (c RBACConfig) IsAllowedToExecuteMany(user User, cmds []Command) bool {
 	allowed := true
 	for _, cmd := range cmds {
 		if !c.IsAllowedToExecute(user, cmd) {

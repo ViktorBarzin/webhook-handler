@@ -13,7 +13,7 @@ type State struct {
 	Message        string                 `yaml:"message"`
 	Permissions    []gorbac.StdPermission `yaml:"permissions"`
 	Commands       []auth.Command         `yaml:"commands"`
-	DefaultHandler []auth.Command         `yaml:"defaultCommand"`
+	DefaultHandler auth.Command           `yaml:"defaultHandler"`
 }
 
 func NewState(name, message string) State {
