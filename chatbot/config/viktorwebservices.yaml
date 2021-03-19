@@ -8,7 +8,20 @@ permissions:
 commands:
 - &cmd-echo-kek
   id: "echo-kek"
-  cmd: 'echo input is: $1' 
+  cmd: |
+    name=$(echo $line | awk '{print $1}')
+    if [ -z "$name" ]; then
+      echo "VPN config name must not be empty"
+      exit 1
+    fi
+    key=$(echo $line | awk '{print $2}')
+    if [ -z "$key" ]; then
+      echo "VPN config key must not be empty"
+      exit 1
+    fi
+    cmd="infra_cli -use-case vpn -vpn-client-name $name -vpn-pub-key '$key'"
+    # echo $cmd
+    $cmd
   prettyName: "echo useful message"
   permissions:
     - *perm-run-shell-commands

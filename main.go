@@ -24,6 +24,15 @@ func main() {
 	fsmConfigFile := flag.String(fsmFlagName, "", "YAML file which contains the description of conversation state machine.")
 	flag.Parse()
 
+	// TEST
+	// out, err := executor.Execute(auth.Command{CMD: "echo input isss: $line"}, "kek")
+	// if err != nil {
+	// 	glog.Fatalf("ERR: %s", err.Error())
+	// }
+	// glog.Infof(out)
+	// return
+	// END TEST
+
 	var configFromEnv string
 	if *fsmConfigFile == "" {
 		configFromEnv = os.Getenv(configEnvVarName)

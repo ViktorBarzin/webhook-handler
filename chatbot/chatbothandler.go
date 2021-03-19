@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"reflect"
+	"regexp"
 
 	"viktorbarzin/webhook-handler/chatbot/auth"
 	"viktorbarzin/webhook-handler/chatbot/executor"
@@ -29,14 +30,20 @@ const (
 	Postback
 )
 
+var (
+	allowedUserInputRe = regexp.MustCompile(`^[a-zA-Z0-9= ]{1,500}$`)
+
+	// vpnFriendlyNameRegex = regexp.MustCompile(`(\w| ){1,40}`)
+	// vpnPubKeyRegex       = regexp.MustCompile(`[-A-Za-z0-9+=]{1,50}|=[^=]|={3,}`)
+)
+
 // ChatbotHandler is a HTTP handler which keeps track of conversations
 type ChatbotHandler struct {
-	UserToFSM   map[string]*statemachine.FSMWithStatesAndEvents
-	ConfigFile  string
-	States      []statemachine.State
-	Events      []statemachine.Event
-	RBACConfig  auth.RBACConfig
-	fsmTemplate statemachine.FSMWithStatesAndEvents
+	UserToFSM  map[string]*statemachine.FSMWithStatesAndEvents
+	ConfigFile string
+	States     []statemachine.State
+	Events     []statemachine.Event
+	RBACConfig auth.RBACConfig
 }
 
 func NewChatbotHandler(configFile string) (*ChatbotHandler, error) {
@@ -44,17 +51,16 @@ func NewChatbotHandler(configFile string) (*ChatbotHandler, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to parse config file and create RBAC struct")
 	}
-	f, err := statemachine.ChatBotFSM(configFile)
+	_, err = statemachine.ChatBotFSM(configFile)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create chatbot FSM ")
+		return nil, errors.Wrapf(err, "failed to create chatbot FSM from config file %s", configFile)
 	}
 	c := &ChatbotHandler{
-		UserToFSM:   map[string]*statemachine.FSMWithStatesAndEvents{},
-		ConfigFile:  configFile,
-		RBACConfig:  rbac,
-		fsmTemplate: *f,
+		UserToFSM:  map[string]*statemachine.FSMWithStatesAndEvents{},
+		ConfigFile: configFile,
+		RBACConfig: rbac,
 	}
-	// fbapi.SetGetStartedButton()
+	fbapi.SetGetStartedButton()
 	return c, nil
 }
 
@@ -136,12 +142,15 @@ func (c *ChatbotHandler) processPostBackMessage(fbCallbackMsg models.FbMessagePo
 func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 	userFsm, ok := c.UserToFSM[senderID]
 	if !ok {
-		c.UserToFSM[senderID] = &c.fsmTemplate
+		f, err := statemachine.ChatBotFSM(c.ConfigFile)
+		if err != nil {
+			return errors.Wrapf(err, "failed to create chatbot FSM for user id %s", senderID)
+		}
+		c.UserToFSM[senderID] = f
 		userFsm = c.UserToFSM[senderID]
 	}
 
 	// Try make transition
-	oldState := userFsm.Current()
 	user := c.RBACConfig.WhoAmI(senderID)
 	glog.Infof("attempting to send %s for user %+v", payload, user)
 	err := c.moveFSM(user, userFsm, payload)
@@ -149,7 +158,7 @@ func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 	moveFSMResult.FSM = *userFsm
 
 	if err == nil {
-		glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", oldState.Name, payload, userFsm.Current().Name, userFsm.FSM.AvailableTransitions())
+		glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", userFsm.Current().Name, payload, userFsm.Current().Name, userFsm.FSM.AvailableTransitions())
 		// Execute command at current state if allowed
 		// if c.RBACConfig.IsAllowedToExecuteMany(user, userFsm.Current().Commands) {
 		// 	glog.Infof("user %+v is allowed to execute commands: %+v", user, userFsm.Current().Commands)
@@ -160,26 +169,45 @@ func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 		// 	glog.Infof("user %+v is not allowed to execute 1 or more of the commands: %+v", user, userFsm.Current().Commands)
 		// }
 	} else {
+		glog.Infof("trying to find a default handler to process '%s'", payload)
+		// This is shit, I know, will refactor
+
+		// If default handler is defined
 		if !reflect.DeepEqual(userFsm.Current().DefaultHandler, auth.Command{}) {
+			glog.Infof("found default handler")
+			// if user is allowed to execute default handler
 			if c.RBACConfig.IsAllowedToExecute(user, userFsm.Current().DefaultHandler) {
 				glog.Infof("executing default handler '%s' for user '%s' state '%s'", userFsm.Current().DefaultHandler.PrettyName, user.Name, userFsm.Current().Name)
-				cmdOutput, err := executor.Execute(userFsm.Current().DefaultHandler, payload)
-				if err == nil {
-					if userFsm.Current().DefaultHandler.ShowCmdOutput {
-						moveFSMResult.CmdOutput = cmdOutput
-					}
-					moveFSMResult.AdditionalMsg = userFsm.Current().DefaultHandler.SuccessExplanation
+				// if input to handler is not valid
+				if !isValidUserInput(payload) {
+					glog.Warningf("user input '%s' did not match allowed pattern '%s'", payload, allowedUserInputRe.String())
+					moveFSMResult.AdditionalMsg = fmt.Sprintf("Invalid input. Please stick to using charates from '%s' set.", allowedUserInputRe.String())
 				} else {
-					errMsg := fmt.Sprintf("failed to execute handler func: %s", err.Error())
-					glog.Errorf(errMsg)
-					moveFSMResult.AdditionalMsg = errMsg
+					glog.Infof("user input '%s' allowed, proceeding with executing default handler", payload)
+					// input to handler is valid
+					cmdOutput, err := executor.Execute(userFsm.Current().DefaultHandler, payload)
+					// if no error during execution of handler
+					if err == nil {
+						glog.Infof("successfully executed default handler for input '%s'", payload)
+						if userFsm.Current().DefaultHandler.ShowCmdOutput {
+							moveFSMResult.CmdOutput = cmdOutput
+						}
+						moveFSMResult.AdditionalMsg = userFsm.Current().DefaultHandler.SuccessExplanation
+					} else {
+						// if error during execution of handler
+						errMsg := fmt.Sprintf("failed to execute handler func: %s", err.Error())
+						glog.Errorf(errMsg)
+						moveFSMResult.AdditionalMsg = errMsg
+					}
 				}
 			} else {
+				// if not allowed to execute default handler
 				glog.Warningf("found default handler '%s' to execute but user '%s' does not have permission to execute this command", userFsm.Current().DefaultHandler.PrettyName, user.Name)
 				moveFSMResult.AdditionalMsg = fmt.Sprintf("You do not have permission to execute '%s'", userFsm.Current().DefaultHandler.PrettyName)
 			}
 		} else {
-			glog.Warningf("failed to make transition from '%s' with msg '%s'. Available transitions are: %+v", oldState.Name, payload, userFsm.FSM.AvailableTransitions())
+			// not a valid event, no defined handler
+			glog.Warningf("failed to make transition from '%s' with msg '%s'. Available transitions are: %+v", userFsm.Current().Name, payload, userFsm.FSM.AvailableTransitions())
 			moveFSMResult.AdditionalMsg = "Could not understand your message :/ Please stick to using the button unless otherwise asked :-)"
 		}
 	}
@@ -193,19 +221,26 @@ func (c *ChatbotHandler) resetFSM(userFsm map[string]*statemachine.FSMWithStates
 	userFsm[userid] = f
 }
 
+func isValidUserInput(input string) bool {
+	return allowedUserInputRe.Match([]byte(input))
+}
+
 func respondToUser(recipient string, moveFSMResult MoveFSMResult) error {
 	// Send raw message with long explanation
 	msgToSend := ""
 	if moveFSMResult.CmdOutput != "" {
 		// if cmd output is non-empty send that
-		msgToSend = fmt.Sprintf("Command output: ```\n\n%s\n\n```", moveFSMResult.CmdOutput)
+		msgToSend += fmt.Sprintf("Command output: ```\n\n%s\n\n```", moveFSMResult.CmdOutput)
 	}
 	if moveFSMResult.AdditionalMsg != "" {
 		// If appendix is non-empty, append it to msg
 		msgToSend += moveFSMResult.AdditionalMsg
 	}
 	if moveFSMResult.CmdOutput == "" {
-		msgToSend = moveFSMResult.FSM.Current().Message
+		if msgToSend != "" {
+			msgToSend += "\n\n"
+		}
+		msgToSend += moveFSMResult.FSM.Current().Message
 	}
 	fbapi.SendRawMessage(recipient, msgToSend)
 
