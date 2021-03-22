@@ -1,4 +1,4 @@
-module viktorbarzin/webhook-handler
+module github.com/viktorbarzin/webhook-handler
 
 go 1.14
 
