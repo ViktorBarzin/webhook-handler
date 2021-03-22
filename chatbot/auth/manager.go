@@ -222,3 +222,43 @@ func (c RBACConfig) IsAllowedToExecuteMany(user User, cmds []Command) bool {
 	}
 	return allowed
 }
+
+// func (c RBACConfig) UsersInGroup(g Group) []User {
+// 	users := []User{}
+// 	for _, u := range c.Users {
+// 		for _, ug := range u.Groups {
+// 			if ug.Name == g.Name {
+// 				users = append(users, u)
+// 				break
+// 			}
+// 		}
+// 	}
+// 	return users
+// }
+
+func (c RBACConfig) UsersInRole(r Role) []User {
+	users := []User{}
+	for _, u := range c.Users {
+		if c.UserHasRole(u, r) {
+			users = append(users, u)
+		}
+	}
+	return users
+}
+
+func (c RBACConfig) UserHasRole(u User, r Role) bool {
+	for _, ur := range u.Roles {
+		if ur.Name == r.Name {
+			return true
+		}
+	}
+
+	for _, ug := range u.Groups {
+		for _, ugr := range ug.Roles {
+			if ugr.Name == r.Name {
+				return true
+			}
+		}
+	}
+	return false
+}

@@ -1,7 +1,7 @@
 package statemachine
 
 import (
-	"viktorbarzin/webhook-handler/chatbot/auth"
+	"github.com/viktorbarzin/webhook-handler/chatbot/auth"
 
 	"github.com/viktorbarzin/gorbac"
 )

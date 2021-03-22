@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"viktorbarzin/webhook-handler/chatbot"
-	"viktorbarzin/webhook-handler/chatbot/fbapi"
+	"github.com/viktorbarzin/webhook-handler/chatbot"
+	"github.com/viktorbarzin/webhook-handler/chatbot/fbapi"
 
 	"github.com/golang/glog"
 )

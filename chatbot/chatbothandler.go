@@ -8,11 +8,11 @@ import (
 	"reflect"
 	"regexp"
 
-	"viktorbarzin/webhook-handler/chatbot/auth"
-	"viktorbarzin/webhook-handler/chatbot/executor"
-	"viktorbarzin/webhook-handler/chatbot/fbapi"
-	"viktorbarzin/webhook-handler/chatbot/models"
-	"viktorbarzin/webhook-handler/chatbot/statemachine"
+	"github.com/viktorbarzin/webhook-handler/chatbot/auth"
+	"github.com/viktorbarzin/webhook-handler/chatbot/executor"
+	"github.com/viktorbarzin/webhook-handler/chatbot/fbapi"
+	"github.com/viktorbarzin/webhook-handler/chatbot/models"
+	"github.com/viktorbarzin/webhook-handler/chatbot/statemachine"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -203,7 +203,12 @@ func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 			} else {
 				// if not allowed to execute default handler
 				glog.Warningf("found default handler '%s' to execute but user '%s' does not have permission to execute this command", userFsm.Current().DefaultHandler.PrettyName, user.Name)
-				moveFSMResult.AdditionalMsg = fmt.Sprintf("You do not have permission to execute '%s'", userFsm.Current().DefaultHandler.PrettyName)
+				glog.Infof("sending approval request")
+				if err := c.sendRequestApprovalRequest(user, userFsm.Current().DefaultHandler, payload); err != nil {
+					moveFSMResult.AdditionalMsg = fmt.Sprintf("failed to send permission approval request : %s", err.Error())
+				} else {
+					moveFSMResult.AdditionalMsg = fmt.Sprintf("You do not have permission to execute '%s'. I have asked for a review for your request.", userFsm.Current().DefaultHandler.PrettyName)
+				}
 			}
 		} else {
 			// not a valid event, no defined handler
@@ -212,8 +217,7 @@ func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 		}
 	}
 
-	respondToUser(senderID, moveFSMResult)
-	return nil
+	return respondToUser(senderID, moveFSMResult)
 }
 
 func (c *ChatbotHandler) resetFSM(userFsm map[string]*statemachine.FSMWithStatesAndEvents, userid string) {

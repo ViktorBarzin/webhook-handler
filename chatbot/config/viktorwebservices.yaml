@@ -5,6 +5,13 @@ permissions:
 - &perm-get-info
   idstr: "get-info"
 
+roles:
+- &admin-role
+  id: "admin"
+  permissions:
+    - *perm-run-shell-commands
+    - *perm-get-info
+
 commands:
 - &cmd-echo-kek
   id: "echo-kek"
@@ -25,13 +32,7 @@ commands:
   prettyName: "echo useful message"
   permissions:
     - *perm-run-shell-commands
-
-roles:
-- &admin-role
-  id: "admin"
-  permissions:
-    - *perm-run-shell-commands
-    - *perm-get-info
+  approvedBy: *admin-role
 
 groups:
 - &viktor-group

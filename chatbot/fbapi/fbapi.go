@@ -12,7 +12,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"viktorbarzin/webhook-handler/chatbot/models"
+
+	"github.com/viktorbarzin/webhook-handler/chatbot/models"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"

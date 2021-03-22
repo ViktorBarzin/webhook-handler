@@ -27,6 +27,7 @@ type Command struct {
 	// Message to send the user after the command succeeded
 	SuccessExplanation string `yaml:"onSuccess"`
 	ShowCmdOutput      bool   `yaml:"showCmdOutput"`
+	ApprovedBy         Role   `yaml:"approvedBy"`
 }
 
 // Role on the RBAC e.g "admin"

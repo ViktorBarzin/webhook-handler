@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"viktorbarzin/webhook-handler/chatbot/auth"
+
+	"github.com/viktorbarzin/webhook-handler/chatbot/auth"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"

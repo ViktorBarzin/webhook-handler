@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"viktorbarzin/webhook-handler/chatbot/auth"
-	"viktorbarzin/webhook-handler/chatbot/executor"
+
+	"github.com/viktorbarzin/webhook-handler/chatbot/auth"
+	"github.com/viktorbarzin/webhook-handler/chatbot/executor"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
