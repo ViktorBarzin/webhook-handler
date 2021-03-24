@@ -149,13 +149,16 @@ func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 		c.UserToFSM[senderID] = f
 		userFsm = c.UserToFSM[senderID]
 	}
-
-	// Try make transition
 	user := c.RBACConfig.WhoAmI(senderID)
-	glog.Infof("attempting to send %s for user %+v", payload, user)
-	err := c.moveFSM(user, userFsm, payload)
 	moveFSMResult := MoveFSMResult{}
 	moveFSMResult.FSM = *userFsm
+
+	if isApprovalRequest([]byte(payload)) {
+		glog.Infof("Processing approval request: %s", payload)
+		return c.processApprovalRequestMessage(senderID, payload, moveFSMResult)
+	}
+	// Try make transition
+	err := c.moveFSM(user, userFsm, payload)
 
 	if err == nil {
 		glog.Infof("successful transition from '%s' with msg: '%s' to '%s'. Available transitions are: %+v", userFsm.Current().Name, payload, userFsm.Current().Name, userFsm.FSM.AvailableTransitions())
@@ -217,6 +220,36 @@ func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 		}
 	}
 
+	return respondToUser(senderID, moveFSMResult)
+}
+
+func (c *ChatbotHandler) processApprovalRequestMessage(senderID, payload string, moveFSMResult MoveFSMResult) error {
+	user := c.RBACConfig.WhoAmI(senderID)
+
+	req, _ := DeserializeApprovalRequest([]byte(payload))
+	// if sender is authorized to process this request
+	if c.RBACConfig.UserHasRole(user, req.What.ApprovedBy) {
+		// user authorized
+		SendApprovalRequestUpdateNotification(req, user)
+		if req.State == ApprovalStateAccepted {
+			fbapi.SendRawMessage(req.From.ID, fmt.Sprintf("Command '%s' with input '%s' will begin executing shortly...", req.What.PrettyName, req.Payload))
+
+			output, err := executor.Execute(req.What, req.Payload)
+			moveFSMResult.CmdOutput = output
+			if err != nil {
+				moveFSMResult.AdditionalMsg = fmt.Sprintf("command '%s' failed: %s", req.What.PrettyName, err.Error())
+			} else {
+				moveFSMResult.AdditionalMsg = "Success!"
+			}
+		} else if req.State == ApprovalStateRejected {
+
+		} else {
+			// unknown approval state request
+		}
+	} else {
+		// user not allowed to authrozie this request
+		moveFSMResult.AdditionalMsg = fmt.Sprintf("Permission denied. You do not have '%s' role", req.What.ApprovedBy.Name)
+	}
 	return respondToUser(senderID, moveFSMResult)
 }
 

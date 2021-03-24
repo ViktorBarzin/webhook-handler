@@ -26,7 +26,7 @@ commands:
       echo "VPN config key must not be empty"
       exit 1
     fi
-    cmd="infra_cli -use-case vpn -vpn-client-name $name -vpn-pub-key '$key'"
+    cmd="infra_cli -use-case vpn -vpn-client-name $name -vpn-pub-key $key"
     # echo $cmd
     $cmd
   prettyName: "echo useful message"

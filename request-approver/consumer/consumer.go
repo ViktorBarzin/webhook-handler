@@ -5,11 +5,12 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"viktorbarzin/webhook-handler/chatbot/auth"
+	"github.com/viktorbarzin/webhook-handler/chatbot/auth"
 )
 
 type ApprovalRequest struct {
-	User auth.User
+	Who  auth.User
+	What auth.Command
 }
 
 func InitConsumer(bootstrapServer, topic, groupId string) (*kafka.Consumer, error) {

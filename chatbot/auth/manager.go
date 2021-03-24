@@ -171,14 +171,14 @@ func initRBAC(rbac *gorbac.RBAC, users []User) {
 func (c RBACConfig) WhoAmI(userId string) User {
 	var res User
 	for _, u := range c.Users {
-		// store guest user
-		if u.ID == GuestUserID {
-			res = u
-		}
 		if u.ID == userId {
 			res = u
 			break
 		}
+	}
+	if reflect.DeepEqual(res, User{}) {
+		// store guest user
+		res = GuestUserWithId(userId)
 	}
 	return res
 }

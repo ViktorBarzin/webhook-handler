@@ -38,29 +38,37 @@ func ResponseWrite(w http.ResponseWriter, code int, msg string) {
 	w.Write([]byte(msg))
 }
 
-func SendRawMessage(receiverPsid, msg string) (*http.Response, error) {
+func SendRawMessage(receiverPsid, msg string) error {
 	payload := getRawMessagePayload(receiverPsid, msg)
 	reader, err := payloadReader(payload, receiverPsid)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get raw message payload reader for msg: %s", msg)
+		return errors.Wrapf(err, "failed to get raw message payload reader for msg: %s", msg)
 	}
 	resp, err := SendRequest(reader)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to send request with msg '%s' to uid '%s'", msg, receiverPsid)
+		return errors.Wrapf(err, "failed to send request with msg '%s' to uid '%s'", msg, receiverPsid)
 	}
-	return resp, nil
+	if resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("got non-ok response: %s, %s", resp.Status, body)
+	}
+	return nil
 }
 
-func SendPostBackMessage(receiverPsid string, payload models.PayloadPostback) (*http.Response, error) {
+func SendPostBackMessage(receiverPsid string, payload models.PayloadPostback) error {
 	reader, err := payloadReader(payload, receiverPsid)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("failed to create message reader for message: %+v", payload))
+		return errors.New(fmt.Sprintf("failed to create message reader for message: %+v", payload))
 	}
 	resp, err := SendRequest(reader)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to send payload: '%+v' to user: %s", payload, receiverPsid)
+		return errors.Wrapf(err, "failed to send payload: '%+v' to user: %s", payload, receiverPsid)
 	}
-	return resp, nil
+	if resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("got non-ok response: %s, %s", resp.Status, body)
+	}
+	return nil
 }
 
 func getRawMessagePayload(receiver, msg string) models.Payload {

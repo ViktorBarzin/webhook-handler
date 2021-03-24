@@ -18,11 +18,11 @@ const (
 
 // Execute runs the given command blocking
 func Execute(cmd auth.Command, input string) (string, error) {
-	glog.Infof("Command: %+v, input: %s", cmd, input)
 	bashCmd := fmt.Sprintf("echo '%s' | while read -r line; do\n %s\n done", input, cmd.CMD)
 	c := exec.Command("/bin/sh", "-c", bashCmd)
 	glog.Infof(strings.Repeat("-", 40))
-	glog.Infof("executing: '%s'", c.String())
+	glog.Infof("Command: %+v, input: %s", cmd, input)
+	// glog.Infof("executing: '%s'", c.String())
 	output, err := c.CombinedOutput()
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to execute cmd: %s; output: %s", c.String(), string(output))

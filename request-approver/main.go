@@ -7,8 +7,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"viktorbarzin/webhook-handler/request-approver/consumer"
-	"viktorbarzin/webhook-handler/request-approver/producer"
+	"github.com/viktorbarzin/webhook-handler/request-approver/consumer"
+	"github.com/viktorbarzin/webhook-handler/request-approver/producer"
 )
 
 const (
