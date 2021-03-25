@@ -39,11 +39,12 @@ var (
 
 // ChatbotHandler is a HTTP handler which keeps track of conversations
 type ChatbotHandler struct {
-	UserToFSM  map[string]*statemachine.FSMWithStatesAndEvents
-	ConfigFile string
-	States     []statemachine.State
-	Events     []statemachine.Event
-	RBACConfig auth.RBACConfig
+	UserToFSM                 map[string]*statemachine.FSMWithStatesAndEvents
+	ConfigFile                string
+	States                    []statemachine.State
+	Events                    []statemachine.Event
+	RBACConfig                auth.RBACConfig
+	ProcessedApprovalRequests []string
 }
 
 func NewChatbotHandler(configFile string) (*ChatbotHandler, error) {
@@ -210,7 +211,7 @@ func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 				if err := c.sendRequestApprovalRequest(user, userFsm.Current().DefaultHandler, payload); err != nil {
 					moveFSMResult.AdditionalMsg = fmt.Sprintf("failed to send permission approval request : %s", err.Error())
 				} else {
-					moveFSMResult.AdditionalMsg = fmt.Sprintf("You do not have permission to execute '%s'. I have asked for a review for your request.", userFsm.Current().DefaultHandler.PrettyName)
+					moveFSMResult.AdditionalMsg = fmt.Sprintf("You do not have permission to execute '%s'. I have asked for a review for your request. Please standby...", userFsm.Current().DefaultHandler.PrettyName)
 				}
 			}
 		} else {
@@ -227,17 +228,27 @@ func (c *ChatbotHandler) processApprovalRequestMessage(senderID, payload string,
 	user := c.RBACConfig.WhoAmI(senderID)
 
 	req, _ := DeserializeApprovalRequest([]byte(payload))
+	if c.isProcessed(req.ID) {
+		cmd, _ := c.cmdFromId(req.CmdID)
+		fbapi.SendRawMessage(senderID, fmt.Sprintf("approval request for '%s' has already been processed", cmd.PrettyName))
+		return nil
+	}
+	what, err := c.cmdFromId(req.CmdID)
+	if err != nil {
+		fbapi.SendRawMessage(senderID, fmt.Sprintf("failed to find command with id '%s'", req.CmdID))
+		return err
+	}
 	// if sender is authorized to process this request
-	if c.RBACConfig.UserHasRole(user, req.What.ApprovedBy) {
+	if c.RBACConfig.UserHasRole(user, what.ApprovedBy) {
 		// user authorized
-		SendApprovalRequestUpdateNotification(req, user)
+		c.SendApprovalRequestUpdateNotification(req, user)
 		if req.State == ApprovalStateAccepted {
-			fbapi.SendRawMessage(req.From.ID, fmt.Sprintf("Command '%s' with input '%s' will begin executing shortly...", req.What.PrettyName, req.Payload))
+			fbapi.SendRawMessage(req.From.ID, fmt.Sprintf("Command '%s' with input '%s' will begin executing shortly...", what.PrettyName, req.Payload))
 
-			output, err := executor.Execute(req.What, req.Payload)
+			output, err := executor.Execute(what, req.Payload)
 			moveFSMResult.CmdOutput = output
 			if err != nil {
-				moveFSMResult.AdditionalMsg = fmt.Sprintf("command '%s' failed: %s", req.What.PrettyName, err.Error())
+				moveFSMResult.AdditionalMsg = fmt.Sprintf("command '%s' failed: %s", what.PrettyName, err.Error())
 			} else {
 				moveFSMResult.AdditionalMsg = "Success!"
 			}
@@ -248,14 +259,30 @@ func (c *ChatbotHandler) processApprovalRequestMessage(senderID, payload string,
 		}
 	} else {
 		// user not allowed to authrozie this request
-		moveFSMResult.AdditionalMsg = fmt.Sprintf("Permission denied. You do not have '%s' role", req.What.ApprovedBy.Name)
+		moveFSMResult.AdditionalMsg = fmt.Sprintf("Permission denied. You do not have '%s' role", what.ApprovedBy.Name)
 	}
-	return respondToUser(senderID, moveFSMResult)
+	if err := respondToUser(req.From.ID, moveFSMResult); err != nil {
+		return errors.Wrapf(err, "failed to notify request creator about the outcome of their command")
+	}
+
+	if err := respondToUser(senderID, moveFSMResult); err != nil {
+		return errors.Wrapf(err, "failed to notify request moderator about the outcome of the command")
+	}
+	return nil
 }
 
 func (c *ChatbotHandler) resetFSM(userFsm map[string]*statemachine.FSMWithStatesAndEvents, userid string) {
 	f, _ := statemachine.ChatBotFSM(c.ConfigFile)
 	userFsm[userid] = f
+}
+
+func (c *ChatbotHandler) isProcessed(requestGuid string) bool {
+	for _, p := range c.ProcessedApprovalRequests {
+		if p == requestGuid {
+			return true
+		}
+	}
+	return false
 }
 
 func isValidUserInput(input string) bool {
@@ -265,10 +292,12 @@ func isValidUserInput(input string) bool {
 func respondToUser(recipient string, moveFSMResult MoveFSMResult) error {
 	// Send raw message with long explanation
 	msgToSend := ""
-	if moveFSMResult.CmdOutput != "" {
-		// if cmd output is non-empty send that
-		msgToSend += fmt.Sprintf("Command output: ```\n\n%s\n\n```", moveFSMResult.CmdOutput)
-	}
+	msgToSend += moveFSMResult.CmdOutput
+	// if moveFSMResult.CmdOutput != "" {
+	// if cmd output is non-empty send that
+	// msgToSend += moveFSMResult.CmdOutput
+	// msgToSend += fmt.Sprintf("Command output: ```\n\n%s\n\n```", moveFSMResult.CmdOutput)
+	// }
 	if moveFSMResult.AdditionalMsg != "" {
 		// If appendix is non-empty, append it to msg
 		msgToSend += moveFSMResult.AdditionalMsg

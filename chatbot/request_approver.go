@@ -3,8 +3,10 @@ package chatbot
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/golang/glog"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/viktorbarzin/webhook-handler/chatbot/auth"
 	"github.com/viktorbarzin/webhook-handler/chatbot/fbapi"
@@ -12,8 +14,10 @@ import (
 )
 
 type ApprovalRequestPayload struct {
-	From    auth.User     `json:"from"`
-	What    auth.Command  `json:"what"`
+	ID    string    `json:"id"`
+	From  auth.User `json:"from"`
+	CmdID string    `json:"cmdID"`
+	// What    auth.Command  `json:"what"`
 	Payload string        `json:"payload"`
 	State   ApprovalState `json:"state"`
 }
@@ -42,6 +46,19 @@ func (a ApprovalState) String() string {
 func isApprovalRequest(payload []byte) bool {
 	var a ApprovalRequestPayload
 	return json.Unmarshal(payload, &a) == nil
+}
+
+func (c *ChatbotHandler) cmdFromId(id string) (auth.Command, error) {
+	var res auth.Command
+	for _, cmd := range c.RBACConfig.Commands {
+		if cmd.ID == id {
+			res = cmd
+		}
+	}
+	if reflect.DeepEqual(res, auth.Command{}) {
+		return res, fmt.Errorf("failed to find command with id %s", id)
+	}
+	return res, nil
 }
 
 // send request to all users in the `approvedBy` role
@@ -90,14 +107,18 @@ func (c *ChatbotHandler) sendRequestApprovalRequest(from auth.User, what auth.Co
 }
 
 // SendApprovalRequestUpdateNotification sends notification to the creator of the request for its status
-func SendApprovalRequestUpdateNotification(r ApprovalRequestPayload, moderator auth.User) error {
-	requestMsg := fmt.Sprintf("Your request to execute '%s' with input '%s' has been %s by %s", r.What.PrettyName, r.Payload, r.State.String(), moderator.Name)
-	err := fbapi.SendRawMessage(r.From.ID, requestMsg)
+func (c *ChatbotHandler) SendApprovalRequestUpdateNotification(r ApprovalRequestPayload, moderator auth.User) error {
+	cmd, err := c.cmdFromId(r.CmdID)
 	if err != nil {
+		return errors.Wrapf(err, "failed to get cmd from id")
+	}
+	requestMsg := fmt.Sprintf("Your request to execute '%s' with input '%s' has been %s by %s", cmd.PrettyName, r.Payload, r.State.String(), moderator.Name)
+
+	if err := fbapi.SendRawMessage(r.From.ID, requestMsg); err != nil {
 		return errors.Wrapf(err, "failed to notify request sender about the status of their request")
 	}
 
-	moderatorMsg := fmt.Sprintf("Successfully notified %s about your decision on '%s'. Decision outcome: %s", r.From.ID, r.What.PrettyName, r.State.String())
+	moderatorMsg := fmt.Sprintf("Successfully notified %s (ID: %s) about your decision on '%s'. Decision outcome: %s", r.From.Name, r.From.ID, cmd.PrettyName, r.State.String())
 	err = fbapi.SendRawMessage(moderator.ID, moderatorMsg)
 	if err != nil {
 		return errors.Wrapf(err, "failed to notify moderator about the success of their request approval/rejection")
@@ -115,7 +136,7 @@ func serializeApprovalRequest(a ApprovalRequestPayload) (string, error) {
 }
 
 func NewApprovalRequest(from auth.User, what auth.Command, state ApprovalState, userInput string) ApprovalRequestPayload {
-	return ApprovalRequestPayload{From: from, What: what, State: state, Payload: userInput}
+	return ApprovalRequestPayload{ID: uuid.New().URN(), From: from, CmdID: what.ID, State: state, Payload: userInput}
 }
 
 func DeserializeApprovalRequest(p []byte) (ApprovalRequestPayload, error) {

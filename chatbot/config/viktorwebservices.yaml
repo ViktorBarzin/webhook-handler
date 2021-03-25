@@ -13,9 +13,11 @@ roles:
     - *perm-get-info
 
 commands:
-- &cmd-echo-kek
-  id: "echo-kek"
+- &cmd-setup-wireguard
+  id: "setup_wireguard"
   cmd: |
+    set -e
+
     name=$(echo $line | awk '{print $1}')
     if [ -z "$name" ]; then
       echo "VPN config name must not be empty"
@@ -26,13 +28,40 @@ commands:
       echo "VPN config key must not be empty"
       exit 1
     fi
-    cmd="infra_cli -use-case vpn -vpn-client-name $name -vpn-pub-key $key"
-    # echo $cmd
-    $cmd
-  prettyName: "echo useful message"
+    # infra_cli logs to stderr
+    cmd="infra_cli -result-only -use-case vpn -vpn-client-name $name -vpn-pub-key $key"
+    set +e
+    ip=$($cmd 2>&1)
+    set -e
+    if [ $? -ne 0 ]; then
+      echo "Error occurred while adding your config: $ip"
+      exit 1
+    fi
+
+    cat << EOF
+    Successfully added vpn config for $name!
+
+    Allocated IP address is: $ip
+
+    In your wireguard config, under the [Interface] section, update the "Address" key to "$ip" (without the quotes).
+    Example:
+
+    [Interface]
+    Address = $ip
+    PrivateKey = ...
+    
+    Once you set this, you should be good to go.
+    Feel free to contact me if you are having connectivity issues.
+
+    P.S: You can choose which subnets you want to route through the Wireguard tunnel.
+    This can be tweaked in the [Peer] section, under "AllowedIPs" key. "0.0.0.0/0" mean the entire internet.
+    If you want to access only my infra services you can set it to "10.0.0.0/8".
+    EOF
+  prettyName: "Setup Wireguard"
   permissions:
     - *perm-run-shell-commands
   approvedBy: *admin-role
+  showCmdOutput: true
 
 groups:
 - &viktor-group
@@ -61,31 +90,24 @@ states:
 - id: &state-setup "Setup"
   message: "What are you looking to setup?"
 - id: &state-setup-wireguard "SetupWireguard"
-  message: >
+  message: |
     I use wireguard as for my VPN. See https://www.wireguard.com/ for more info.
+
+    Steps overview:
     
-
     1. Install wireguard client from https://www.wireguard.com/install/
-
-    2. Go to: https://wg.viktorbarzin.me and create your config (if you don't trust my key generation, feel free to generate your key pair but use the config provided in the sample config)
-
-    3. Wait for approval from admin with further details.
-
+    2. Go to: https://wg.viktorbarzin.me and create your config. 
+    3. Send me your public key (described later).
+    3. Wait for request approval.
     4. Once your request is approved, you will receive a message from me with the IP address you are allocated.
 
-
-    Please send me your client friendly name and public key in the following format (without the '<>'):
-    
+    Let's get you started!
+    Please send me your client friendly name and public key in the following format (without the '<>'):    
     <client friendly name> <public key>
 
-
     Example:
-
     Viktor iOcNe48FpLwOa6jBBs9686K5ViPZmLEaJ7axjGT00Xg=
-
-
-    Once your config is setup, I'll will message you to let you know you can start using your config.
-  defaultHandler: *cmd-echo-kek
+  defaultHandler: *cmd-setup-wireguard
 ###### End of Setup state machine ###### 
 
 ###### Info state machine ###### 
@@ -95,7 +117,7 @@ states:
     # - *perm-get-info
   # Commands are executed in order. If user does not have permission for at least 1, none are executed
   # commands:
-  # - *cmd-echo-kek
+  # - *cmd-setup-wireguard
 - id: &state-blog "Blog"
   message: "I have a website where I casually blog on various tech topics. To visit my website go to https://viktorbarzin.me"
 - id: &state-f1 "F1"

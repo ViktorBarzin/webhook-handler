@@ -25,7 +25,7 @@ func Execute(cmd auth.Command, input string) (string, error) {
 	// glog.Infof("executing: '%s'", c.String())
 	output, err := c.CombinedOutput()
 	if err != nil {
-		return "", errors.Wrapf(err, "failed to execute cmd: %s; output: %s", c.String(), string(output))
+		return "", errors.Wrapf(err, "failed to execute cmd: '%s' with error '%s'.\n Command output: %s", cmd.PrettyName, err.Error(), string(output))
 	}
 	glog.Infof("cmd combined output: %s", string(output))
 	glog.Infof(strings.Repeat("-", 40))

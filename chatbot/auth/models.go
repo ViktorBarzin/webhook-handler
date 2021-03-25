@@ -26,7 +26,7 @@ type Command struct {
 	Permissions []gorbac.StdPermission `yaml:"permissions" json:"permissions"`
 	// Message to send the user after the command succeeded
 	SuccessExplanation string `yaml:"onSuccess"`
-	ShowCmdOutput      bool   `yaml:"showCmdOutput"`
+	ShowCmdOutput      bool   `yaml:"showCmdOutput" json:"showCmdOutput"`
 	ApprovedBy         Role   `yaml:"approvedBy" json:"approvedBy"`
 }
 
