@@ -111,7 +111,7 @@ func (c *ChatbotHandler) HandleFunc(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		glog.Errorf(fmt.Sprintf("failed processing message: %s", err.Error()))
-		fbapi.ResponseWrite(w, 500, "Internal error")
+		fbapi.ResponseWrite(w, 200, "Internal error")
 	} else {
 		glog.Infof("Successfully processed request with body: '%s'", string(bodybytes))
 		fbapi.ResponseWrite(w, 200, "OK")
