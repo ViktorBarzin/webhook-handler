@@ -49,13 +49,6 @@ commands:
     [Interface]
     Address = $ip
     PrivateKey = ...
-
-    The other change you need to do is under the [Peer] section update the PublicKey to '3OeDa6Z3Z6vPVxn/WKJujYL7DoDYPPpI5W+2glUYLHU='
-    Example:
-
-    [Peer]
-    PublicKey = 3OeDa6Z3Z6vPVxn/WKJujYL7DoDYPPpI5W+2glUYLHU=
-    AllowedIPs = 0.0.0.0/0
     
     Once you set this, you should be good to go.
     Feel free to contact me if you are having connectivity issues.
