@@ -31,7 +31,7 @@ const (
 )
 
 var (
-	allowedUserInputRe = regexp.MustCompile(`^[a-zA-Z0-9=. ]{1,500}$`)
+	allowedUserInputRe = regexp.MustCompile(`^[a-zA-Z0-9=.@ ]{1,500}$`)
 
 	// vpnFriendlyNameRegex = regexp.MustCompile(`(\w| ){1,40}`)
 	// vpnPubKeyRegex       = regexp.MustCompile(`[-A-Za-z0-9+=]{1,50}|=[^=]|={3,}`)

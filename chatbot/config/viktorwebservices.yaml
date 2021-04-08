@@ -90,6 +90,33 @@ commands:
   approvedBy: *admin-role
   showCmdOutput: true
 
+- &cmd-setup-email-alias
+  id: "setup_email_alias"
+  cmd: |
+    set -e
+    to=$(echo $line | awk '{print $1}')
+    if [ -z "$to" ]; then
+      echo "Email address to forward emails to must not be empty"
+      exit 1
+    fi
+
+    set +e
+    out=$(infra_cli -use-case add-email-alias -forward-to "$to" -result-only 2>&1)
+    set -e
+
+    if [ $? -ne 0 ]; then
+      echo "Error occurred while updating adding new email alias: $out"
+      exit 1
+    fi
+
+    echo "$out. Please wait for a couple of minutes before you start using your new email alias (you can monitor the progress of the job https://drone.viktorbarzin.me/ViktorBarzin/infra/, once this job finishes it can take up to 2 minutes to propagate the changes)"
+
+  prettyName: "Setup Email Alias"
+  permissions:
+    - *perm-run-shell-commands
+  approvedBy: *admin-role
+  showCmdOutput: true
+
 groups:
 - &viktor-group
   name: "viktor"
@@ -145,6 +172,17 @@ states:
         - 1.1.1.1 (Cloudflare's DNS)
         - 9.9.9.9
   defaultHandler: *cmd-setup-openwrt-dns
+- id: &state-setup-email-alias "SetupEmailAlias"
+  message: |
+    You can setup virtual email addresses via my mail infrastructure.
+    You will receive a generated random email alias which you can use for whatever you need.
+    All emails sent to this random address will be forwarded to the email you provide me now with.
+
+    A small visualization of how it will work:
+    someone -> random-email@viktorbarzin.me -> your_email
+    
+    Please send me an email address you wish to receive all emails:
+  defaultHandler: *cmd-setup-email-alias
 ###### End of Setup state machine ###### 
 
 ###### Info state machine ###### 
@@ -201,6 +239,9 @@ events:
 - id: &event-setup-openwrt-dns "SetupOpenWRTDNS"
   message: "Setup OpenWRT's DNS"
   orderID: 13
+- id: &event-setup-email-alias "SetupEmailAlias"
+  message: "Setup Virtual Email"
+  orderID: 14
 #### End of Setup events ####
 #### Info events ####
 - id: &event-showbloginfo "ShowBlogInfo"
@@ -267,10 +308,15 @@ statemachine:
   src:
     - *state-setup
   dst: *state-setup-openwrt-dns
+- name: *event-setup-email-alias
+  src:
+    - *state-setup
+  dst: *state-setup-email-alias
 - name: *event-back
   src:
     - *state-setup-wireguard
     - *state-setup-openwrt-dns
+    - *state-setup-email-alias
   dst: *state-setup
 #### End of Setup state machine ####
 #### Info state machine ####
