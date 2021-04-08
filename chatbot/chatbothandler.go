@@ -188,30 +188,17 @@ func (c *ChatbotHandler) processMessage(senderID, payload string) error {
 					moveFSMResult.AdditionalMsg = fmt.Sprintf("Invalid input. Please stick to using charates from '%s' set.", allowedUserInputRe.String())
 				} else {
 					glog.Infof("user input '%s' allowed, proceeding with executing default handler", payload)
-					// input to handler is valid
-					cmdOutput, err := executor.Execute(userFsm.Current().DefaultHandler, payload)
-					// if no error during execution of handler
-					if err == nil {
-						glog.Infof("successfully executed default handler for input '%s'", payload)
-						if userFsm.Current().DefaultHandler.ShowCmdOutput {
-							moveFSMResult.CmdOutput = cmdOutput
-						}
-						moveFSMResult.AdditionalMsg = userFsm.Current().DefaultHandler.SuccessExplanation
-					} else {
-						// if error during execution of handler
-						errMsg := fmt.Sprintf("failed to execute handler func: %s", err.Error())
-						glog.Errorf(errMsg)
-						moveFSMResult.AdditionalMsg = errMsg
-					}
+					moveFSMResult.CmdOutput = "Your command has been scheduled for execution, stand by for results..."
+					go executeAndRepond(senderID, moveFSMResult, userFsm.Current().DefaultHandler, payload)
 				}
 			} else {
 				// if not allowed to execute default handler
 				glog.Warningf("found default handler '%s' to execute but user '%s' does not have permission to execute this command", userFsm.Current().DefaultHandler.PrettyName, user.Name)
 				glog.Infof("sending approval request")
 				if err := c.sendRequestApprovalRequest(user, userFsm.Current().DefaultHandler, payload); err != nil {
-					moveFSMResult.AdditionalMsg = fmt.Sprintf("failed to send permission approval request : %s", err.Error())
+					moveFSMResult.CmdOutput = fmt.Sprintf("failed to send permission approval request : %s", err.Error())
 				} else {
-					moveFSMResult.AdditionalMsg = fmt.Sprintf("You do not have permission to execute '%s'. I have asked for a review for your request. Please standby...", userFsm.Current().DefaultHandler.PrettyName)
+					moveFSMResult.CmdOutput = fmt.Sprintf("You do not have permission to execute '%s'. I have asked for a review for your request. Please standby...", userFsm.Current().DefaultHandler.PrettyName)
 				}
 			}
 		} else {
@@ -245,13 +232,14 @@ func (c *ChatbotHandler) processApprovalRequestMessage(senderID, payload string,
 		if req.State == ApprovalStateAccepted {
 			fbapi.SendRawMessage(req.From.ID, fmt.Sprintf("Command '%s' with input '%s' will begin executing shortly...", what.PrettyName, req.Payload))
 
-			output, err := executor.Execute(what, req.Payload)
-			moveFSMResult.CmdOutput = output
-			if err != nil {
-				moveFSMResult.AdditionalMsg = fmt.Sprintf("command '%s' failed: %s", what.PrettyName, err.Error())
-			} else {
-				moveFSMResult.AdditionalMsg = "Success!"
-			}
+			go executeAndRepond(req.From.ID, moveFSMResult, what, req.Payload)
+			// output, err := executor.Execute(what, req.Payload)
+			// moveFSMResult.CmdOutput = output
+			// if err != nil {
+			// 	moveFSMResult.AdditionalMsg = fmt.Sprintf("command '%s' failed: %s", what.PrettyName, err.Error())
+			// } else {
+			// 	moveFSMResult.AdditionalMsg = "Success!"
+			// }
 		} else if req.State == ApprovalStateRejected {
 
 		} else {
@@ -457,4 +445,22 @@ func getMessageType(jsonBody string) (MessageType, error) {
 		return Postback, nil
 	}
 	return 0, errors.New(fmt.Sprintf("message type is not supported. message: %s", jsonBody))
+}
+
+func executeAndRepond(senderID string, moveFSMResult MoveFSMResult, cmd auth.Command, payload string) {
+	cmdOutput, err := executor.Execute(cmd, payload)
+	// if no error during execution of handler
+	if err == nil {
+		glog.Infof("successfully executed default handler for input '%s'", payload)
+		if cmd.ShowCmdOutput {
+			moveFSMResult.CmdOutput = cmdOutput
+		}
+		moveFSMResult.AdditionalMsg = cmd.SuccessExplanation
+	} else {
+		// if error during execution of handler
+		errMsg := fmt.Sprintf("failed to execute handler func: %s", err.Error())
+		glog.Errorf(errMsg)
+		moveFSMResult.AdditionalMsg = errMsg
+	}
+	respondToUser(senderID, moveFSMResult)
 }
