@@ -177,6 +177,7 @@ states:
     You can setup virtual email addresses via my mail infrastructure.
     You will receive a generated random email alias which you can use for whatever you need.
     All emails sent to this random address will be forwarded to the email you provide me now with.
+    If you want to check existing aliases go to https://github.com/ViktorBarzin/infra/blob/master/modules/kubernetes/mailserver/extra/aliases.txt).
 
     A small visualization of how it will work:
     someone -> random-email@viktorbarzin.me -> your_email
