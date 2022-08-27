@@ -18,7 +18,7 @@ commands:
   cmd: |
     set -e
 
-    name=$(echo $line | awk '{print $1}')
+    name=$(echo $line | tr '\n' ' ' | awk '{print $1}')
     if [ -z "$name" ]; then
       echo "VPN config name must not be empty"
       exit 1
