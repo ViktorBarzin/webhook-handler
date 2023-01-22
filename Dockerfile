@@ -2,7 +2,7 @@
 FROM viktorbarzin/infra:latest AS infra-cli
 
 FROM golang:alpine as webhook-handler
-RUN apk add --update openssh
+RUN apk add --update openssh wireguard-tools
 RUN mkdir /app 
 ADD . /app/
 WORKDIR /app 
