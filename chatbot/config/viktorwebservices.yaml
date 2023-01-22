@@ -23,13 +23,19 @@ commands:
       echo "VPN config name must not be empty"
       exit 1
     fi
-    key=$(echo $line | awk '{print $2}')
-    if [ -z "$key" ]; then
-      echo "VPN config key must not be empty"
-      exit 1
-    fi
+    # key=$(echo $line | awk '{print $2}')
+    # if [ -z "$key" ]; then
+    #   echo "VPN config key must not be empty"
+    #   exit 1
+    # fi
+
+    # Create private and pub keys for host
+    priv_key_file=$(mktemp)
+    pub_key=$(wg genkey | tee $priv_key_file | wg pubkey)
+    priv_key=$(cat $priv_key_file)
+
     # infra_cli logs to stderr
-    cmd="infra_cli -result-only -use-case vpn -vpn-client-name $name -vpn-pub-key $key"
+    cmd="infra_cli -result-only -use-case vpn -vpn-client-name $name -vpn-pub-key $pub_key"
     set +e
     ip=$($cmd 2>&1)
     set -e
@@ -38,24 +44,20 @@ commands:
       exit 1
     fi
 
+
     cat << EOF
     Successfully added vpn config for $name!
-
-    Allocated IP address is: $ip
-
-    In your wireguard config, under the [Interface] section, update the "Address" key to "$ip" (without the quotes).
-    Example:
+    Save the following in a .conf file and use as Wireguard config on the client.
 
     [Interface]
     Address = $ip
-    PrivateKey = ...
-    
-    Once you set this, you should be good to go.
-    Feel free to contact me if you are having connectivity issues.
+    PrivateKey = $priv_key
+    DNS = 10.0.20.1
 
-    P.S: You can choose which subnets you want to route through the Wireguard tunnel.
-    This can be tweaked in the [Peer] section, under "AllowedIPs" key. "0.0.0.0/0" mean the entire internet.
-    If you want to access only my infra services you can set it to "10.0.0.0/8".
+    [Peer]
+    PublicKey = 3OeDa6Z3Z6vPVxn/WKJujYL7DoDYPPpI5W+2glUYLHU=
+    AllowedIPs = 0.0.0.0/0
+    Endpoint = vpn.viktorbarzin.me:51820
     EOF
   prettyName: "Setup Wireguard"
   permissions:
