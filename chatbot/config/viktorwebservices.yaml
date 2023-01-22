@@ -43,6 +43,7 @@ commands:
     cat << EOF
     Successfully added vpn config for $name!
     Save the following in a .conf file and use as Wireguard config on the client.
+    The config will be live in ~5 minutes.
 
     [Interface]
     Address = $ip
@@ -147,9 +148,8 @@ states:
     Steps overview:
     
     1. Install wireguard client from https://www.wireguard.com/install/
-    2. Add a name to your config (speeds up approval)
-    3. Wait for request approval.
-    4. Once approved, you will receive a message from me with the final config - put this in your Wireguard client
+    2. Wait for request approval.
+    3. Once approved, you will receive a message from me with the final config - put this in your Wireguard client
 
     Let's get you started!
     Please send me your client friendly name 
