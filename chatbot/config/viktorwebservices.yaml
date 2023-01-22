@@ -18,16 +18,11 @@ commands:
   cmd: |
     set -e
 
-    name=$(echo $line | tr '\n' ' ' | awk '{print $1}')
+    name=$(echo $line | tr '\n' ' ')
     if [ -z "$name" ]; then
       echo "VPN config name must not be empty"
       exit 1
     fi
-    # key=$(echo $line | awk '{print $2}')
-    # if [ -z "$key" ]; then
-    #   echo "VPN config key must not be empty"
-    #   exit 1
-    # fi
 
     # Create private and pub keys for host
     priv_key_file=$(mktemp)
@@ -152,17 +147,15 @@ states:
     Steps overview:
     
     1. Install wireguard client from https://www.wireguard.com/install/
-    2. Go to: https://wg.viktorbarzin.me and create your config. 
-    3. Send me your public key (described later).
+    2. Add a name to your config (speeds up approval)
     3. Wait for request approval.
-    4. Once your request is approved, you will receive a message from me with the IP address you are allocated.
+    4. Once approved, you will receive a message from me with the final config - put this in your Wireguard client
 
     Let's get you started!
-    Please send me your client friendly name and public key in the following format (without the '<>'):    
-    <client friendly name> <public key>
+    Please send me your client friendly name 
 
     Example:
-    Viktor iOcNe48FpLwOa6jBBs9686K5ViPZmLEaJ7axjGT00Xg=
+    Viktor 
   defaultHandler: *cmd-setup-wireguard
 - id: &state-setup-openwrt-dns "SetupOpenWRTDNS"
   message: |
