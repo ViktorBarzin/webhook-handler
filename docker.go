@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,13 +20,19 @@ const (
 	namespaceArg      = "n"
 )
 
-// Couldn't figure out how to use Dockerhub's webhook verifier
-// so instead use a shared url argument as secret
-func isDockerHubPayloadValid(r *http.Request, payload docker.BuildPayload) bool {
-	if secret, ok := r.URL.Query()[secretArg]; !ok || len(secret) == 0 || secret[0] != webhookSecret {
+func derivedSecret(namespace, deployment string) string {
+	mac := hmac.New(sha256.New, []byte(webhookSecret))
+	mac.Write([]byte(namespace + "/" + deployment))
+	return hex.EncodeToString(mac.Sum(nil))[:16]
+}
+
+func isDockerHubPayloadValid(r *http.Request, namespace, deployment string) bool {
+	secret := r.URL.Query().Get(secretArg)
+	if secret == "" {
 		return false
 	}
-	return true
+	expected := derivedSecret(namespace, deployment)
+	return hmac.Equal([]byte(secret), []byte(expected))
 }
 
 func dockerHubHandler(w http.ResponseWriter, r *http.Request) {
@@ -38,11 +47,6 @@ func dockerHubHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch payload.(type) {
 	case docker.BuildPayload:
-		ok := isDockerHubPayloadValid(r, payload.(docker.BuildPayload))
-		if !ok {
-			writeError(w, 403, fmt.Sprintf("Invalid Dockerhub payload: %s", r.URL.RequestURI()))
-			return
-		}
 		namespace, ok := r.URL.Query()[namespaceArg]
 		if !ok || len(namespace) == 0 {
 			writeError(w, 400, fmt.Sprintf("Argument namespace (%s) not passed or empty", namespaceArg))
@@ -53,9 +57,13 @@ func dockerHubHandler(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 400, fmt.Sprintf("Argument deployment name (%s) not passed or empty", deploymentNameArg))
 			return
 		}
-
 		if len(namespace) > 1 || len(deploymentName) > 1 {
 			writeError(w, 400, fmt.Sprintf("Must not specify namespace and deployment name more than once"))
+			return
+		}
+
+		if !isDockerHubPayloadValid(r, namespace[0], deploymentName[0]) {
+			writeError(w, 403, fmt.Sprintf("Invalid Dockerhub payload: %s", r.URL.RequestURI()))
 			return
 		}
 		err = deploy(namespace[0], deploymentName[0])
