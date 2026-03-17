@@ -53,6 +53,7 @@ func main() {
 	mux.HandleFunc(dockerhubPath, dockerHubHandler)
 	mux.HandleFunc(fbapi.HandlerPath, chatbotHandler.HandleFunc)
 	mux.HandleFunc(messageViktorHandler, MessageViktorHandleFunc)
+	mux.HandleFunc(authentikProvisionPath, authentikProvisionHandler)
 
 	glog.Infof("Starting webhook handler on %s", listenAddr)
 	err = http.ListenAndServe(listenAddr, mux)
