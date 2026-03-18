@@ -7,50 +7,41 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
 	authentikProvisionPath = "/authentik/provision"
 
-	authentikSecretEnvVar        = "AUTHENTIK_WEBHOOK_SECRET"
-	woodpeckerAPIURLEnvVar       = "WOODPECKER_API_URL"
-	woodpeckerTokenEnvVar        = "WOODPECKER_TOKEN"
-	woodpeckerInfraRepoIDEnvVar  = "WOODPECKER_INFRA_REPO_ID"
+	authentikSecretEnvVar       = "AUTHENTIK_WEBHOOK_SECRET"
+	woodpeckerAPIURLEnvVar      = "WOODPECKER_API_URL"
+	woodpeckerTokenEnvVar       = "WOODPECKER_TOKEN"
+	woodpeckerInfraRepoIDEnvVar = "WOODPECKER_INFRA_REPO_ID"
+
+	maxBodySize     = 1 << 20 // 1 MB
+	maxUsernameLen  = 63      // Kubernetes name limit
 )
 
 var (
-	authentikWebhookSecret  = os.Getenv(authentikSecretEnvVar)
-	woodpeckerAPIURL        = os.Getenv(woodpeckerAPIURLEnvVar)
-	woodpeckerToken         = os.Getenv(woodpeckerTokenEnvVar)
-	woodpeckerInfraRepoID   = os.Getenv(woodpeckerInfraRepoIDEnvVar)
+	authentikWebhookSecret = os.Getenv(authentikSecretEnvVar)
+	woodpeckerAPIURL       = os.Getenv(woodpeckerAPIURLEnvVar)
+	woodpeckerToken        = os.Getenv(woodpeckerTokenEnvVar)
+	woodpeckerInfraRepoID  = os.Getenv(woodpeckerInfraRepoIDEnvVar)
+
+	woodpeckerClient = &http.Client{Timeout: 30 * time.Second}
 )
 
-// authentikEvent represents the relevant fields from an Authentik webhook notification.
-type authentikEvent struct {
-	Body string `json:"body"`
-	// Authentik sends event context as a nested structure
-	Severity string `json:"severity"`
-}
-
-// authentikModelEvent is the parsed body from the notification body text.
-// Authentik notification webhooks send a JSON payload with body/severity fields.
-// The actual event details (username, email, group) come from the notification context
-// which Authentik embeds differently depending on the notification transport version.
-// We parse what we need from either query params or the body.
-
 func isAuthentikSignatureValid(r *http.Request, body []byte) bool {
-	// Check query param secret first (Authentik notification transports support ?secret=...)
 	secret := r.URL.Query().Get("secret")
 	if secret != "" && hmac.Equal([]byte(secret), []byte(authentikWebhookSecret)) {
 		return true
 	}
 
-	// Check X-Authentik-Signature header (HMAC-SHA256 of body)
 	sig := r.Header.Get("X-Authentik-Signature")
 	if sig == "" {
 		return false
@@ -61,11 +52,9 @@ func isAuthentikSignatureValid(r *http.Request, body []byte) bool {
 	return hmac.Equal([]byte(sig), []byte(expected))
 }
 
-// triggerWoodpeckerPipeline POSTs to Woodpecker API to trigger the provision-user pipeline.
 func triggerWoodpeckerPipeline(username, email string) error {
 	if woodpeckerAPIURL == "" || woodpeckerToken == "" || woodpeckerInfraRepoID == "" {
-		return fmt.Errorf("woodpecker env vars not configured (need %s, %s, %s)",
-			woodpeckerAPIURLEnvVar, woodpeckerTokenEnvVar, woodpeckerInfraRepoIDEnvVar)
+		return fmt.Errorf("woodpecker env vars not configured")
 	}
 
 	url := fmt.Sprintf("%s/api/repos/%s/pipelines", strings.TrimRight(woodpeckerAPIURL, "/"), woodpeckerInfraRepoID)
@@ -90,14 +79,14 @@ func triggerWoodpeckerPipeline(username, email string) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+woodpeckerToken)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := woodpeckerClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to POST to Woodpecker: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := ioutil.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("woodpecker API returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
@@ -111,41 +100,32 @@ func authentikProvisionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxBodySize))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
-	defer r.Body.Close()
 
 	log.Printf("Authentik provision webhook received: %s %s (body length: %d)", r.RemoteAddr, r.URL.RequestURI(), len(body))
 
-	// Validate signature/secret
-	if authentikWebhookSecret != "" && !isAuthentikSignatureValid(r, body) {
+	// Reject requests when no secret is configured (fail-closed)
+	if authentikWebhookSecret == "" {
+		log.Printf("Authentik webhook: secret not configured, rejecting request")
+		writeError(w, http.StatusInternalServerError, "webhook secret not configured")
+		return
+	}
+
+	if !isAuthentikSignatureValid(r, body) {
 		log.Printf("Authentik webhook: invalid signature from %s", r.RemoteAddr)
 		writeError(w, http.StatusForbidden, "invalid signature")
 		return
 	}
 
-	// Parse the webhook payload
-	// Authentik notification webhook payload structure:
-	// {
-	//   "body": "...",
-	//   "severity": "notice",
-	//   ...
-	// }
-	// For custom webhook notifications triggered by expression policies,
-	// we expect username and email to be passed as query params or in the body.
-	//
-	// We support two modes:
-	// 1. Query params: ?username=X&email=Y (simplest, set in notification transport URL)
-	// 2. JSON body with username/email fields (from custom event context)
-
 	username := r.URL.Query().Get("username")
 	email := r.URL.Query().Get("email")
 
 	if username == "" || email == "" {
-		// Try parsing from JSON body
 		var bodyData map[string]interface{}
 		if err := json.Unmarshal(body, &bodyData); err == nil {
 			if u, ok := bodyData["username"].(string); ok && username == "" {
@@ -155,7 +135,6 @@ func authentikProvisionHandler(w http.ResponseWriter, r *http.Request) {
 				email = e
 			}
 
-			// Try nested context.model structure (Authentik model_created events)
 			if ctx, ok := bodyData["context"].(map[string]interface{}); ok {
 				if model, ok := ctx["model"].(map[string]interface{}); ok {
 					if app, ok := model["app"].(map[string]interface{}); ok {
@@ -166,7 +145,6 @@ func authentikProvisionHandler(w http.ResponseWriter, r *http.Request) {
 							email = e
 						}
 					}
-					// Also try flat model fields
 					if u, ok := model["username"].(string); ok && username == "" {
 						username = u
 					}
@@ -184,10 +162,14 @@ func authentikProvisionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitize: username must be alphanumeric + dashes/underscores
+	// Validate username: alphanumeric + dashes/underscores, max length
+	if len(username) > maxUsernameLen {
+		writeError(w, http.StatusBadRequest, "username too long")
+		return
+	}
 	for _, c := range username {
 		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid character in username: %c", c))
+			writeError(w, http.StatusBadRequest, "invalid character in username")
 			return
 		}
 	}
@@ -196,7 +178,7 @@ func authentikProvisionHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := triggerWoodpeckerPipeline(username, email); err != nil {
 		log.Printf("Authentik provision: failed to trigger Woodpecker: %s", err)
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to trigger pipeline: %s", err))
+		writeError(w, http.StatusInternalServerError, "failed to trigger provisioning pipeline")
 		return
 	}
 
